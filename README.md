@@ -20,6 +20,7 @@ but it is quite complete, thanks a series of elements:
  * it is currently used in production and it works!
 
 What follows is an example of configuration .cfg INI file used by this script:
+
 `
    ;
    ; Polygons, types and directions need to be coherent each other and list
