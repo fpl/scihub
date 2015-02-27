@@ -21,31 +21,29 @@ but it is quite complete, thanks a series of elements:
 
 What follows is an example of configuration .cfg INI file used by this script:
 
-`
-   ;
-   ; Polygons, types and directions need to be coherent each other and list
-   ; the same number of items.
-   ;
-   
-   [Polygons]
-   
-   polygon1 = POLYGON((15.819485626219 40.855620164394,16.445706329344 40.855620164394,16.445706329344 41.120994219991,15.819485626219 41.120994219991,15.819485626219 40.855620164394))
-   polygon2 = POLYGON((16.349232635497 40.791189284951,16.909535369872 40.791189284951,16.909535369872 41.131338714384,16.349232635497 41.131338714384,16.349232635497 40.791189284951))
-   
-   [Types]
-   
-   type1 = SLC
-   type2 = SLC
-   
-   [Directions]
-   
-   direction1 = Descending
-   direction2 = Ascending
-   
-   [Authentication]
-   username = XXXXXXXX
-   password = YYYYYYY
-`
+	;
+	; Polygons, types and directions need to be coherent each other and list
+	; the same number of items.
+	;
+	
+	[Polygons]
+	
+	polygon1 = POLYGON((15.819485626219 40.855620164394,16.445706329344 40.855620164394,16.445706329344 41.120994219991,15.819485626219 41.120994219991,15.819485626219 40.855620164394))
+	polygon2 = POLYGON((16.349232635497 40.791189284951,16.909535369872 40.791189284951,16.909535369872 41.131338714384,16.349232635497 41.131338714384,16.349232635497 40.791189284951))
+	
+	[Types]
+	
+	type1 = SLC
+	type2 = SLC
+	
+	[Directions]
+	
+	direction1 = Descending
+	direction2 = Ascending
+	
+	[Authentication]
+	username = XXXXXXXX
+	password = YYYYYYY
 
 This file can be stored as `/usr/local/etc/scihub.cfg` or `$HOME/.scihub.cfg` or
 splitted among them, as more convenient.
