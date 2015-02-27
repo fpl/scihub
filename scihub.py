@@ -62,11 +62,11 @@ from StringIO import StringIO
 from osgeo import ogr
 
 def usage():
-    print '''usage: %s [-d|-v|-k|-h]''' % sys.argv[0]
+    print '''usage: %s [-c|-d|-D path|-f|-h|-k|-l|-m|-v]''' % sys.argv[0]
 
 def help():
     print '''
-usage: %s [-d|-v|-k|-h]
+usage: %s [-c|-d|-D path|-f|-h|-k|-l|-m|-v]
     -c  create db only
     -d  download data .zip file
     -D <path> name of SQLite database to use
@@ -78,7 +78,7 @@ usage: %s [-d|-v|-k|-h]
     -v  run verbosely
 
 An ESA SCIHUB username and password profile is required and read from a
-$HOME/.scihub.cfg file such as:
+scihub configuration file, such as:
 
     [Autentication]
     username = <user>
