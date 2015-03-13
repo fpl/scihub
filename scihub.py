@@ -62,11 +62,11 @@ from StringIO import StringIO
 from osgeo import ogr
 
 def usage():
-    print '''usage: %s [-c|-d|-D path|-f|-h|-k|-l|-m|-v]''' % sys.argv[0]
+    print '''usage: %s [-c|-d|-D path|-f|-h|-k|-l|-m|-v|-o]''' % sys.argv[0]
 
 def help():
     print '''
-usage: %s [-c|-d|-D path|-f|-h|-k|-l|-m|-v]
+usage: %s [-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path]
     -c  create db only
     -d  download data .zip file
     -D <path> name of SQLite database to use
@@ -76,6 +76,8 @@ usage: %s [-c|-d|-D path|-f|-h|-k|-l|-m|-v]
     -l  output XML list of entries
     -m  download manifest file
     -v  run verbosely
+    -L <path> output products names to file
+    -o  overwrite data .zip file even if it exists
 
 An ESA SCIHUB username and password profile is required and read from a
 scihub configuration file, such as:
@@ -102,9 +104,11 @@ kml = False
 force = False
 create_db = False
 db_file = 'scihub.sqlite'
+list_products = False
+overwrite = False
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:],'cvfdhmklD:')
+    opts, args = getopt.getopt(sys.argv[1:],'cvfdhmklD:L:')
 except getopt.GetoptError:
     usage()
     sys.exit(3)
@@ -126,6 +130,11 @@ for opt, arg in opts:
         force = True
     if opt == '-D':
         dbfile = arg
+    if opt == '-L':
+        list_products = True
+        productsfile = arg
+    if opt == '-o':
+        overwrite = True
     if opt == '-h':
         help()
         sys.exit(5)
@@ -287,6 +296,9 @@ for url in urls:
 
 cur = db.cursor()
 
+if list_products:
+    pf = open(productsfile,'w')
+
 for product in products:
     uniqid = product[0]
     name = product[1]
@@ -301,6 +313,10 @@ for product in products:
     platform = product[10]
     cur.execute('''SELECT COUNT(*) FROM products WHERE hash=?''',(uniqid,))
     row = cur.fetchone()
+
+    if list_products:
+        pf.write('%s\n' % name)
+
     if not row[0] or force:
         if manifest_download:
             manifest = "%s/Products('%s')/Nodes('%s.SAFE')/Nodes('manifest.safe')/$value" % (servicebase,uniqid,name)
@@ -320,17 +336,21 @@ for product in products:
         if data_download:
             data = "%s/Products('%s')/$value" % (servicebase, uniqid)
             filename = "%s.zip" % name
-            if verbose: 
-                print "downloading %s data file..." % name
-            with open(filename, 'wb') as f:
-                c = pycurl.Curl()
-                c.setopt(c.URL,data)
-                c.setopt(c.FOLLOWLOCATION, True)
-                c.setopt(c.SSL_VERIFYPEER, False)
-                c.setopt(c.USERPWD,auth)
-                c.setopt(c.WRITEFUNCTION,f.write)
-                c.perform()
-                c.close()
+            if not os.path.exists(filename) or overwrite:
+                if verbose: 
+                    print "downloading %s data file..." % name
+                with open(filename, 'wb') as f:
+                    c = pycurl.Curl()
+                    c.setopt(c.URL,data)
+                    c.setopt(c.FOLLOWLOCATION, True)
+                    c.setopt(c.SSL_VERIFYPEER, False)
+                    c.setopt(c.USERPWD,auth)
+                    c.setopt(c.WRITEFUNCTION,f.write)
+                    c.perform()
+                    c.close()
+            else:
+                if verbose:
+                    print "skipping existing file %s" % filename
 
         if kml:
             poly = ogr.CreateGeometryFromWkt(footprint)
@@ -374,6 +394,9 @@ Platform = $[PlatformName]
     else:
         if verbose:
             print "skipping %s" % name
+
+if list_products:
+    pf.close()
 
 db.close()
 sys.exit(0)

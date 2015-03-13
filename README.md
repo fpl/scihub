@@ -7,7 +7,9 @@ located at the Scientific Data Hub https://scihub.esa.int/
 The archive can be queryed by a custom web service API documented at
 https://scihub.esa.int/userguide/BatchScripting
 and this script adopt it to do a better job in downloading periodically
-and storing images.
+and storing images. The API is based on OpenData http://www.odata.org/
+and OpenSearch http://www.opensearch.org/
+
 
 This Python script can be installed to download regularly from the
 archive on the basis of a specific query. It is a proof of concept,
@@ -55,5 +57,4 @@ splitted among them, as more convenient.
    
 Note that you need to install a few pre-requisite packages in order to use this script,
 mainly pycurl, ogr, ElementTree and urllib.
-
 
