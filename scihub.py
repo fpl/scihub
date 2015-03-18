@@ -60,6 +60,7 @@ import sqlite3 as sqlite
 import xml.etree.ElementTree as et
 from StringIO import StringIO
 from osgeo import ogr
+import shapely.wkt
 
 def usage():
     print '''usage: %s [-c|-d|-D path|-f|-h|-k|-l|-m|-v|-o]''' % sys.argv[0]
@@ -151,7 +152,8 @@ if create_db:
             CREATE TABLE products(id integer primary key, 
                 hash text, name text, idate text, bdate text, edate text, 
                 ptype text, direction text, orbitno integer, 
-                relorbitno integer, footprint text, platform text);
+                relorbitno integer, footprint text, platform text,
+                footprint_r1 text, centroid_r1 text);
             CREATE UNIQUE INDEX h ON products(hash);
             CREATE INDEX id ON products(idate);
             CREATE INDEX bd ON products(bdate);
@@ -161,6 +163,8 @@ if create_db:
             CREATE INDEX orbno ON products(orbitno);
             CREATE INDEX p ON products(platform);
             CREATE INDEX rorbno ON products(relorbitno);
+            CREATE INDEX fpr1 ON products(footprint_r1);
+            CREATE INDEX c1 ON products(centroid_r1);
             ''')
     db.commit()
     db.close()
@@ -354,6 +358,9 @@ for product in products:
 
         if kml:
             poly = ogr.CreateGeometryFromWkt(footprint)
+            simple = shapely.wkt.loads(footprint)
+            footprint_r1 = shapely.wkt.dumps(simple,rounding_precision=1)
+            centroid_r1 = shapely.wkt.dumps(simple.centroid,rounding_precision=1)
             style = '''<Style
 id="ballon-style"><BalloonStyle><text><![CDATA[
 Name = $[Name]
@@ -387,9 +394,9 @@ Platform = $[PlatformName]
             kmlfile.close()
 
         cur.execute('''INSERT OR REPLACE INTO products 
-                (id,hash,name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,footprint,platform) 
-                VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?)''', 
-                (uniqid,name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,footprint, platform))
+                (id,hash,name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,footprint,platform,footprint_r1,centroid_r1) 
+                VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?)''', 
+                (uniqid,name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,footprint,platform,footprint_r1,centroid_r1))
         db.commit()
     else:
         if verbose:
