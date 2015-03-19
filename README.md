@@ -1,5 +1,5 @@
-ESA Sentinel-1 SCIHUB rolling archive downloader
-================================================
+ESA Sentinel-1 Science Hub rolling archive downloader
+=====================================================
 
 This is an easy script to download Sentinel-1 data from the ESA rolling archive
 located at the Scientific Data Hub https://scihub.esa.int/
