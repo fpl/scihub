@@ -63,7 +63,7 @@ from osgeo import ogr
 import shapely.wkt
 
 def usage():
-    print '''usage: %s [-c|-d|-D path|-f|-h|-k|-l|-m|-v|-o]''' % sys.argv[0]
+    print '''usage: %s [-c|-d|-D path|-C path|-f|-h|-k|-l|-m|-v|-o]''' % sys.argv[0]
 
 def help():
     print '''
@@ -71,6 +71,7 @@ usage: %s [-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path]
     -c  create db only
     -d  download data .zip file
     -D <path> name of SQLite database to use
+    -C <path> configuration file to use
     -f  force
     -h  this help
     -k  create KML skeleton addon file
@@ -107,9 +108,10 @@ create_db = False
 db_file = 'scihub.sqlite'
 list_products = False
 overwrite = False
+configuration_file = '/usr/local/etc/scihub.cfg'
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:],'cvfdhmklD:L:')
+    opts, args = getopt.getopt(sys.argv[1:],'cvfdhmklD:L:C:')
 except getopt.GetoptError:
     usage()
     sys.exit(3)
@@ -134,6 +136,8 @@ for opt, arg in opts:
     if opt == '-L':
         list_products = True
         productsfile = arg
+    if opt == '-C':
+        configuration_file = arg
     if opt == '-o':
         overwrite = True
     if opt == '-h':
@@ -176,7 +180,7 @@ auth = ''
 
 try:
     config = configparser.ConfigParser()
-    config.read(['/usr/local/etc/scihub.cfg', os.path.expanduser('~/.scihub.cfg')])
+    config.read([configuration_file, os.path.expanduser('~/.scihub.cfg')])
 
     username = config.get('Authentication','username')
     password = config.get('Authentication','password')
