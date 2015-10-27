@@ -360,11 +360,9 @@ for product in products:
                 if verbose:
                     print "skipping existing file %s" % filename
 
+
         if kml:
             poly = ogr.CreateGeometryFromWkt(footprint)
-            simple = shapely.wkt.loads(footprint)
-            footprint_r1 = shapely.wkt.dumps(simple,rounding_precision=1)
-            centroid_r1 = shapely.wkt.dumps(simple.centroid,rounding_precision=1)
             style = '''<Style
 id="ballon-style"><BalloonStyle><text><![CDATA[
 Name = $[Name]
@@ -397,6 +395,9 @@ Platform = $[PlatformName]
             kmlfile.write(buff)
             kmlfile.close()
 
+        simple = shapely.wkt.loads(footprint)
+        footprint_r1 = shapely.wkt.dumps(simple,rounding_precision=1)
+        centroid_r1 = shapely.wkt.dumps(simple.centroid,rounding_precision=1)
         cur.execute('''INSERT OR REPLACE INTO products 
                 (id,hash,name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,footprint,platform,footprint_r1,centroid_r1) 
                 VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?)''', 
