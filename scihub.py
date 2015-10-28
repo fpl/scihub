@@ -61,6 +61,7 @@ import xml.etree.ElementTree as et
 from StringIO import StringIO
 from osgeo import ogr
 import shapely.wkt
+import zipfile
 
 def usage():
     print '''usage: %s [-c|-d|-D path|-C path|-f|-h|-k|-l|-m|-v|-o]''' % sys.argv[0]
@@ -344,7 +345,7 @@ for product in products:
         if data_download:
             data = "%s/Products('%s')/$value" % (servicebase, uniqid)
             filename = "%s.zip" % name
-            if not os.path.exists(filename) or overwrite:
+            if not os.path.exists(filename) or not zipfile.is_zipfile(filename) or overwrite:
                 if verbose: 
                     print "downloading %s data file..." % name
                 with open(filename, 'wb') as f:
