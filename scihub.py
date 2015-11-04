@@ -91,8 +91,8 @@ scihub configuration file, such as:
 ''' % sys.argv[0]
 
 def isodate(date):
-    iso, ignore = date.replace('T',' ').replace('Z','').split('.')
-    return iso
+    iso, ignore = date.replace('T',' ').replace('Z','')
+    return iso[0:19]
 
 searchbase = 'https://scihub.esa.int/dhus/search'
 servicebase = 'https://scihub.esa.int/dhus/odata/v1'
