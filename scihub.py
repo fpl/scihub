@@ -62,6 +62,7 @@ from StringIO import StringIO
 from osgeo import ogr
 import shapely.wkt
 import zipfile
+import re
 
 def usage():
     print '''usage: %s [-c|-d|-D path|-C path|-f|-h|-k|-l|-m|-v|-o]''' % sys.argv[0]
@@ -91,8 +92,8 @@ scihub configuration file, such as:
 ''' % sys.argv[0]
 
 def isodate(date):
-    iso, ignore = date.replace('T',' ').replace('Z','').split('.')
-    return iso
+    iso = re.search('([0-9]{4}-[0-9]{2}-[0-9]{2})T([0-9]{2}:[0-9]{2}:[0-9]{2})(\.[0-9]+)?Z',date)
+    return iso.group(1) + ' ' + iso.group(2)
 
 searchbase = 'https://scihub.esa.int/dhus/search'
 servicebase = 'https://scihub.esa.int/dhus/odata/v1'
