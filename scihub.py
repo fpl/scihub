@@ -134,7 +134,7 @@ for opt, arg in opts:
     if opt == '-f':
         force = True
     if opt == '-D':
-        dbfile = arg
+        db_file = arg
     if opt == '-L':
         list_products = True
         productsfile = arg
