@@ -349,15 +349,21 @@ for product in products:
             if not os.path.exists(filename) or not zipfile.is_zipfile(filename) or overwrite:
                 if verbose: 
                     print "downloading %s data file..." % name
-                with open(filename, 'wb') as f:
-                    c = pycurl.Curl()
-                    c.setopt(c.URL,data)
-                    c.setopt(c.FOLLOWLOCATION, True)
-                    c.setopt(c.SSL_VERIFYPEER, False)
-                    c.setopt(c.USERPWD,auth)
-                    c.setopt(c.WRITEFUNCTION,f.write)
-                    c.perform()
-                    c.close()
+                loop = True
+                while loop:
+                    with open(filename, 'wb') as f:
+                        c = pycurl.Curl()
+                        c.setopt(c.URL,data)
+                        c.setopt(c.FOLLOWLOCATION, True)
+                        c.setopt(c.SSL_VERIFYPEER, False)
+                        c.setopt(c.USERPWD,auth)
+                        c.setopt(c.WRITEFUNCTION,f.write)
+                        try:
+                            c.perform()
+                            loop = False
+                        except:
+                            loop = True
+                        c.close()
             else:
                 if verbose:
                     print "skipping existing file %s" % filename
