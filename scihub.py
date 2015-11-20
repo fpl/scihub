@@ -63,6 +63,7 @@ from osgeo import ogr
 import shapely.wkt
 import zipfile
 import re
+import time
 
 def usage():
     print '''usage: %s [-c|-d|-D path|-C path|-f|-h|-k|-l|-m|-v|-o]''' % sys.argv[0]
@@ -363,6 +364,9 @@ for product in products:
                             loop = False
                         except:
                             loop = True
+                            if verbose:
+                                print "download failed, restarting in 5 minutes..."
+                                time.sleep(300)
                         c.close()
             else:
                 if verbose:
