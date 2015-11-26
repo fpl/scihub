@@ -347,11 +347,12 @@ for product in products:
         if data_download:
             data = "%s/Products('%s')/$value" % (servicebase, uniqid)
             filename = "%s.zip" % name
+            attempt = 1
             if not os.path.exists(filename) or not zipfile.is_zipfile(filename) or overwrite:
-                if verbose: 
-                    print "downloading %s data file..." % name
                 loop = True
                 while loop:
+                    if verbose: 
+                        print "Attempt %s : downloading %s data file..." % (attempt, name)
                     with open(filename, 'wb') as f:
                         c = pycurl.Curl()
                         c.setopt(c.URL,data)
@@ -361,6 +362,13 @@ for product in products:
                         c.setopt(c.WRITEFUNCTION,f.write)
                         try:
                             c.perform()
+                            if os.path.getsize(filename) < 2048:
+                                loop = True
+                                if verbose:
+                                    print "Server response error, restarting in 5 minutes"
+                                attempt += 1
+                                time.sleep(300)
+                            else:
                             loop = False
                         except:
                             loop = True
