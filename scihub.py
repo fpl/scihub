@@ -64,6 +64,7 @@ import shapely.wkt
 import zipfile
 import re
 import time
+import magic
 
 def usage():
     print '''usage: %s [-c|-d|-D path|-C path|-f|-h|-k|-l|-m|-v|-o]''' % sys.argv[0]
@@ -112,6 +113,13 @@ db_file = 'scihub.sqlite'
 list_products = False
 overwrite = False
 configuration_file = '/usr/local/etc/scihub.cfg'
+
+try:
+    m = magic.open(magic.MAGIC_MIME_TYPE)
+    m.load()
+except:
+    print "magic module error, wrong version?"
+    sys.exit(8)
 
 try:
     opts, args = getopt.getopt(sys.argv[1:],'cvfdhmklD:L:C:')
@@ -350,15 +358,25 @@ for product in products:
             if not os.path.exists(filename) or not zipfile.is_zipfile(filename) or overwrite:
                 if verbose: 
                     print "downloading %s data file..." % name
+
                 loop = True
                 while loop:
-                    with open(filename, 'wb') as f:
+                    if os.path.exists(filename) and m.file(filename) == 'application/zip':
+                        counter = os.path.getsize(filename)
+                        mode = 'ab'
+                        if verbose:
+                            print "resuming download starting from byte %d" % counter
+                    else:
+                        counter = 0
+                        mode = 'wb'
+                    with open(filename, mode) as f:
                         c = pycurl.Curl()
                         c.setopt(c.URL,data)
                         c.setopt(c.FOLLOWLOCATION, True)
                         c.setopt(c.SSL_VERIFYPEER, False)
                         c.setopt(c.USERPWD,auth)
                         c.setopt(c.WRITEFUNCTION,f.write)
+                        c.setopt(c.RESUME_FROM,counter)
                         try:
                             c.perform()
                             loop = False
@@ -368,6 +386,11 @@ for product in products:
                                 print "download failed, restarting in 5 minutes..."
                                 time.sleep(300)
                         c.close()
+                        if m.file(filename) != 'application/zip':
+                            loop = True
+                            if verbose:
+                                print "downloaded file invalid, restarting in 5 minutes..."
+                                time.sleep(300)
             else:
                 if verbose:
                     print "skipping existing file %s" % filename
