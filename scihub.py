@@ -119,9 +119,9 @@ configuration_file = '/usr/local/etc/scihub.cfg'
 try:
     m = magic.open(magic.MAGIC_MIME_TYPE)
     m.load()
-except:
-    print "magic module error, wrong version?"
-    sys.exit(8)
+except AttributeError,e:
+    m = magic.Magic(mime=True)
+    m.file = m.from_file
 
 try:
     opts, args = getopt.getopt(sys.argv[1:],'cvfdhmklD:L:C:o',
