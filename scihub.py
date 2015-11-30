@@ -67,23 +67,25 @@ import time
 import magic
 
 def usage():
-    print '''usage: %s [-c|-d|-D path|-C path|-f|-h|-k|-l|-m|-v|-o]''' % sys.argv[0]
+    print '''usage: %s [-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-m|-v|-o]''' % sys.argv[0]
 
 def help():
     print '''
-usage: %s [-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path]
-    -c  create db only
-    -d  download data .zip file
-    -D <path> name of SQLite database to use
-    -C <path> configuration file to use
-    -f  force
-    -h  this help
-    -k  create KML skeleton addon file
-    -l  output XML list of entries
-    -m  download manifest file
-    -v  run verbosely
-    -L <path> output products names to file
-    -o  overwrite data .zip file even if it exists
+usage: %s [-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o]
+          [--create|--download|--configuration=path|--data=path|--force|--help|--kml|
+           --list|--manifest|--verbose|--products=path|--overwrite]
+    -c --create create db only
+    -d --download download data .zip file
+    -D --data= <path> name of SQLite database to use
+    -C --configuration= <path> configuration file to use
+    -f --force force
+    -h --help this help
+    -k --kml create KML skeleton addon files
+    -l --list output XML list of entries
+    -m --manifest download manifest files
+    -v --verbose run verbosely
+    -L --products= <path> output products names to file
+    -o --overwrite overwrite data .zip file even if it exists
 
 An ESA SCIHUB username and password profile is required and read from a
 scihub configuration file, such as:
@@ -122,36 +124,38 @@ except:
     sys.exit(8)
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:],'cvfdhmklD:L:C:')
+    opts, args = getopt.getopt(sys.argv[1:],'cvfdhmklD:L:C:o',
+            ['create','verbose','force','download','help','manifest','kml',
+                'list','data=','products=','configuration=','overwrite'])
 except getopt.GetoptError:
     usage()
     sys.exit(3)
 
 for opt, arg in opts:
-    if opt == '-m':
+    if opt in ['-m','--manifest']:
         manifest_download = True
-    if opt == '-c':
+    if opt in ['-c','--create']:
         create_db = True
-    if opt == '-d':
+    if opt in ['-d','--download']:
         data_download = True
-    if opt == '-v':
+    if opt in ['-v','--verbose']:
         verbose = True
-    if opt == '-k':
+    if opt in ['-k','-kml']:
         kml = True
-    if opt == '-l':
+    if opt in ['-l','--list']:
         output_list = True
-    if opt == '-f':
+    if opt in ['-f','--force']:
         force = True
-    if opt == '-D':
+    if opt in ['-D','--data']:
         db_file = arg
-    if opt == '-L':
+    if opt in ['-L','--products']:
         list_products = True
         productsfile = arg
-    if opt == '-C':
+    if opt in ['-C','--configuration']:
         configuration_file = arg
-    if opt == '-o':
+    if opt in ['-o','--overwrite']:
         overwrite = True
-    if opt == '-h':
+    if opt in ['-h','--help']:
         help()
         sys.exit(5)
 
@@ -361,7 +365,7 @@ for product in products:
 
                 loop = True
                 while loop:
-                    if os.path.exists(filename) and m.file(filename) == 'application/zip':
+                    if os.path.exists(filename) and m.file(filename) == 'application/zip' and not overwrite:
                         counter = os.path.getsize(filename)
                         mode = 'ab'
                         if verbose:
