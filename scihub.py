@@ -381,6 +381,7 @@ for product in products:
                         c.setopt(c.USERPWD,auth)
                         c.setopt(c.WRITEFUNCTION,f.write)
                         c.setopt(c.RESUME_FROM,counter)
+                        c.setopt(c.FAILONERROR,True)
                         try:
                             c.perform()
                             loop = False
