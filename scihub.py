@@ -99,8 +99,8 @@ def isodate(date):
     iso = re.search('([0-9]{4}-[0-9]{2}-[0-9]{2})T([0-9]{2}:[0-9]{2}:[0-9]{2})(\.[0-9]+)?Z',date)
     return iso.group(1) + ' ' + iso.group(2)
 
-searchbase = 'https://scihub.esa.int/dhus/search'
-servicebase = 'https://scihub.esa.int/dhus/odata/v1'
+searchbase = 'https://scihub.copernicus.eu/dhus/search'
+servicebase = 'https://scihub.copernicus.eu/dhus/odata/v1'
 
 products = []
 
