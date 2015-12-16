@@ -99,8 +99,24 @@ def isodate(date):
     iso = re.search('([0-9]{4}-[0-9]{2}-[0-9]{2})T([0-9]{2}:[0-9]{2}:[0-9]{2})(\.[0-9]+)?Z',date)
     return iso.group(1) + ' ' + iso.group(2)
 
-searchbase = 'https://scihub.esa.int/dhus/search'
-servicebase = 'https://scihub.esa.int/dhus/odata/v1'
+# The main Scientific Data Hub 
+
+searchbase = 'https://scihub.copernicus.eu/dhus/search'
+servicebase = 'https://scihub.copernicus.eu/dhus/odata/v1'
+
+# The alternative API Hub is dedicated to users of the scripting interface. 
+# The API Hub Access is currently available only for users registered before the
+# 20th of November 12:00 UTC, the user credentials as of the 20th November are 
+# valid to access this site.
+# The API Hub is managed with the same quota restrictions, ie. a limit
+# of two parallel downloads per user. The site is publishing precisely
+# the same data content as the Scientific Data Hub (both Sentinel-1 and
+# Sentinel-2), with all new data as of the 16th November. A rolling policy
+# for the Hub will be established following the first month of monitored
+# operations.
+
+alt_searchbase = 'https://scihub.copernicus.eu/apihub/search'
+alt_servicebase = 'https://scihub.copernicus.eu/apihub/odata/v1'
 
 products = []
 
@@ -115,6 +131,7 @@ db_file = 'scihub.sqlite'
 list_products = False
 overwrite = False
 configuration_file = '/usr/local/etc/scihub.cfg'
+alternative = False
 
 try:
     m = magic.open(magic.MAGIC_MIME_TYPE)
@@ -126,7 +143,8 @@ except AttributeError,e:
 try:
     opts, args = getopt.getopt(sys.argv[1:],'cvfdhmklD:L:C:o',
             ['create','verbose','force','download','help','manifest','kml',
-                'list','data=','products=','configuration=','overwrite'])
+                'list','data=','products=','configuration=','overwrite',
+                'alternative'])
 except getopt.GetoptError:
     usage()
     sys.exit(3)
@@ -155,6 +173,8 @@ for opt, arg in opts:
         configuration_file = arg
     if opt in ['-o','--overwrite']:
         overwrite = True
+    if opt in ['-a','--alternative']:
+        alternative = True
     if opt in ['-h','--help']:
         help()
         sys.exit(5)
@@ -192,6 +212,10 @@ if create_db:
     sys.exit(0)
 
 auth = ''
+
+if alternative:
+    searchbase = alt_searchbase
+    servicebase = alt_servicebase 
 
 try:
     config = configparser.ConfigParser()
