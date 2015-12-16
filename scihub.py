@@ -71,9 +71,9 @@ def usage():
 
 def help():
     print '''
-usage: %s [-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o]
+usage: %s [-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-a]
           [--create|--download|--configuration=path|--data=path|--force|--help|--kml|
-           --list|--manifest|--verbose|--products=path|--overwrite]
+           --list|--manifest|--verbose|--products=path|--overwrite|--alternative]
     -c --create create db only
     -d --download download data .zip file
     -D --data= <path> name of SQLite database to use
@@ -86,6 +86,7 @@ usage: %s [-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o]
     -v --verbose run verbosely
     -L --products= <path> output products names to file
     -o --overwrite overwrite data .zip file even if it exists
+    -a --alternative use the apihub alternative site
 
 An ESA SCIHUB username and password profile is required and read from a
 scihub configuration file, such as:
