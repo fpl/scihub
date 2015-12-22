@@ -237,14 +237,25 @@ try:
     directions_items = config.items('Directions')
     for key, direction in directions_items:
         directions.append(direction)
+    platforms = []
+    platform_items = config.items('Platforms')
+    s1 = re.compile('[sS](entinel)?[-_]?1',re.IGNORECASE)
+    s2 = re.compile('[sS](entinel)?[-_]?2',re.IGNORECASE)
+    for key, platform in platform_items:
+        p = 'Sentinel-1'
+        if s1.match(platform):
+            p = 'Sentinel-1'
+        if s2.match(platform):
+            p = 'Sentinel-2'
+        platforms.append(p)
 
-    if len(types) != len(polygons) or len(directions) != len(polygons):
-        print 'Incorrect number of polygons, types and direction in configuration file'
+    if  len(types) != len(polygons) or len(directions) != len(polygons) or len(platforms) != len(polygons):
+        print 'Incorrect number of polygons, types, platforms and direction in configuration file'
         sys.exit(6)
 
     if verbose:
         for i in range(len(polygons)):
-            print 'Polygon: %s, %s, %s' % (polygons[i], types[i], directions[i])
+            print 'Polygon: %s, %s, %s, %s' % (polygons[i], platforms[i], types[i], directions[i])
 
 except configparser.Error, e:
     print 'Error parsing configuration file: %s' % e
@@ -269,12 +280,12 @@ refdate = last[0] + 'T00:00:00.000Z'
 
 criteria = []
 for i in range(len(polygons)):
-    criteria.append({'type':types[i], 'direction': directions[i], 'polygon':polygons[i]})
+    criteria.append({'platform':platforms[i] , 'type':types[i], 'direction': directions[i], 'polygon':polygons[i]})
 
 params = []
 for criterium in criteria:
-    params.append({'q': '''ingestiondate:[%s TO NOW] AND producttype:%s AND orbitdirection:%s AND footprint:"Intersects(%s)"''' % \
-        (refdate, criterium['type'],criterium['direction'],criterium['polygon']), 'rows': '1000', 'start':'0'})
+    params.append({'q': '''ingestiondate:[%s TO NOW] AND platformname:%s AND producttype:%s AND orbitdirection:%s AND footprint:"Intersects(%s)"''' % \
+        (refdate, criterium['platform'], criterium['type'],criterium['direction'],criterium['polygon']), 'rows': '1000', 'start':'0'})
 
 # urls need encoding due to complexity of arguments
 
