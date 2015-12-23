@@ -23,13 +23,25 @@ but it is quite complete, thanks to a series of features:
  * a simple INI file format can be used to improve and customize
    the script
  * all management and download operations can be run separately
+ * Data downloads can be checked and restarted on failure
  * it is free software and can be extended easily for better purposes
  * it is currently used in production and it works!
 
 What follows is an example of configuration .cfg INI file used by this script:
 
+	[Global]
+
 	;
-	; Polygons, types and directions need to be coherent each other and list
+	; This sections contains default specs for parameters which can be
+	; overriden for each polygon item
+	;
+
+	platform = Sentinel-1
+	type = SLC
+	direction = Any
+
+	;
+	; Polygons, types, platforms and directions need to be coherent each other and list
 	; the same number of items.
 	;
 	
@@ -38,6 +50,11 @@ What follows is an example of configuration .cfg INI file used by this script:
 	polygon1 = POLYGON((15.819485626219 40.855620164394,16.445706329344 40.855620164394,16.445706329344 41.120994219991,15.819485626219 41.120994219991,15.819485626219 40.855620164394))
 	polygon2 = POLYGON((16.349232635497 40.791189284951,16.909535369872 40.791189284951,16.909535369872 41.131338714384,16.349232635497 41.131338714384,16.349232635497 40.791189284951))
 	
+	[Platforms]
+
+	platform1 = Sentinel-1
+	platform2 = Sentinel-1
+
 	[Types]
 	
 	type1 = SLC

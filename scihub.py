@@ -31,23 +31,33 @@
 #    
 #    polygon1 = POLYGON((15.819485626219 40.855620164394,16.445706329344 40.855620164394,16.445706329344 41.120994219991,15.819485626219 41.120994219991,15.819485626219 40.855620164394))
 #    polygon2 = POLYGON((16.349232635497 40.791189284951,16.909535369872 40.791189284951,16.909535369872 41.131338714384,16.349232635497 41.131338714384,16.349232635497 40.791189284951))
+#    polygon3 = POLYGON((17.349232635497 40.791189284951,16.909535369872 40.791189284951,16.909535369872 41.131338714384,16.349232635497 41.131338714384,17.349232635497 40.791189284951))
 #    
+#    [Platforms]
+#
+#    platform1 = Sentinel-1
+#    platform2 = S-1
+#    platform3 = ANY
+#
 #    [Types]
 #    
 #    type1 = SLC
 #    type2 = SLC
+#    type3 = ANY
 #    
 #    [Directions]
 #    
 #    direction1 = Descending
 #    direction2 = Ascending
+#    direction3 = ANY
 #    
 #    [Authentication]
 #    username = XXXXXXXX
 #    password = YYYYYYY
 #
 # This file can be stored as /usr/local/etc/scihub.cfg or $HOME/.scihub.cfg or
-# splitted among them, as more convenient.
+# splitted among them, as more convenient. You can additionally pass its name as a
+# command line argument.
 #    
 
 import pycurl
