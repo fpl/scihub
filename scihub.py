@@ -67,7 +67,7 @@ import time
 import magic
 
 def usage():
-    print '''usage: %s [-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-m|-v|-o]''' % sys.argv[0]
+    print '''usage: %s [-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-m|-v|-o|-a]''' % sys.argv[0]
 
 def help():
     print '''
@@ -142,7 +142,7 @@ except AttributeError,e:
     m.file = m.from_file
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:],'cvfdhmklD:L:C:o',
+    opts, args = getopt.getopt(sys.argv[1:],'cvfdhmklD:L:C:oa',
             ['create','verbose','force','download','help','manifest','kml',
                 'list','data=','products=','configuration=','overwrite',
                 'alternative'])
