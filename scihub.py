@@ -77,13 +77,13 @@ import time
 import magic
 
 def usage():
-    print '''usage: %s [-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-m|-v|-o|-a]''' % sys.argv[0]
+    print '''usage: %s [-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-m|-v|-o|-a|-r]''' % sys.argv[0]
 
 def help():
     print '''
-usage: %s [-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-a]
+usage: %s [-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-a|-r|-t]
           [--create|--download|--configuration=path|--data=path|--force|--help|--kml|
-           --list|--manifest|--verbose|--products=path|--overwrite|--alternative]
+           --list|--manifest|--verbose|--products=path|--overwrite|--alternative|--resume|--test]
     -c --create create db only
     -d --download download data .zip file
     -D --data= <path> name of SQLite database to use
@@ -97,6 +97,8 @@ usage: %s [-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-a]
     -L --products= <path> output products names to file
     -o --overwrite overwrite data .zip file even if it exists
     -a --alternative use the apihub alternative site
+    -r --resume try using resume to continue download
+    -t --test test ZIP file at check time
 
 An ESA SCIHUB username and password profile is required and read from a
 scihub configuration file, such as:
@@ -105,6 +107,14 @@ scihub configuration file, such as:
     username = <user>
     password = <xxxx>
 ''' % sys.argv[0]
+
+def testzip(filename):
+    try:
+        z = zipfile.ZipFile(filename)
+        z.testzip()
+        return True
+    except:
+        return False
 
 def isodate(date):
     iso = re.search('([0-9]{4}-[0-9]{2}-[0-9]{2})T([0-9]{2}:[0-9]{2}:[0-9]{2})(\.[0-9]+)?Z',date)
@@ -143,6 +153,8 @@ list_products = False
 overwrite = False
 configuration_file = '/usr/local/etc/scihub.cfg'
 alternative = False
+resume = False
+test = False
 
 try:
     m = magic.open(magic.MAGIC_MIME_TYPE)
@@ -152,10 +164,10 @@ except AttributeError,e:
     m.file = m.from_file
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:],'cvfdhmklD:L:C:oa',
+    opts, args = getopt.getopt(sys.argv[1:],'cvfdhmklD:L:C:oart',
             ['create','verbose','force','download','help','manifest','kml',
                 'list','data=','products=','configuration=','overwrite',
-                'alternative'])
+                'alternative','resume','test'])
 except getopt.GetoptError:
     usage()
     sys.exit(3)
@@ -186,6 +198,10 @@ for opt, arg in opts:
         overwrite = True
     if opt in ['-a','--alternative']:
         alternative = True
+    if opt in ['-r','--resume']:
+        resume = True
+    if opt in ['-t','--test']:
+        test = True
     if opt in ['-h','--help']:
         help()
         sys.exit(5)
@@ -405,13 +421,13 @@ for product in products:
         if data_download:
             data = "%s/Products('%s')/$value" % (servicebase, uniqid)
             filename = "%s.zip" % name
-            if not os.path.exists(filename) or not zipfile.is_zipfile(filename) or overwrite:
+            if overwrite or not os.path.exists(filename) or not zipfile.is_zipfile(filename) or not resume or (test and not testzip(filename)):
                 if verbose: 
                     print "downloading %s data file..." % name
 
                 loop = True
                 while loop:
-                    if os.path.exists(filename) and m.file(filename) == 'application/zip' and not overwrite:
+                    if not overwrite and resume and os.path.exists(filename) and m.file(filename) == 'application/zip' :
                         counter = os.path.getsize(filename)
                         mode = 'ab'
                         if verbose:
