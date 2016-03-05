@@ -171,7 +171,7 @@ for opt, arg in opts:
         data_download = True
     if opt in ['-v','--verbose']:
         verbose = True
-    if opt in ['-k','-kml']:
+    if opt in ['-k','--kml']:
         kml = True
     if opt in ['-l','--list']:
         output_list = True
@@ -400,7 +400,7 @@ for product in products:
         if data_download:
             data = "%s/Products('%s')/$value" % (servicebase, uniqid)
             filename = "%s.zip" % name
-            if overwrite or not os.path.exists(filename) or not zipfile.is_zipfile(filename) or not resume or (test and not testzip(filename)):
+            if overwrite or not os.path.exists(filename) or not zipfile.is_zipfile(filename) or (test and not testzip(filename)):
                 if verbose: 
                     print "downloading %s data file..." % name
 
