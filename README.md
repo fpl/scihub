@@ -40,6 +40,9 @@ What follows is an example of configuration .cfg INI file used by this script:
 	type = SLC
 	direction = Any
 
+	; this is only useful with S-2 images
+	cloudcoverpercentage = 10
+
 	;
 	; Polygons, types, platforms and directions need to be coherent each other and list
 	; the same number of items.
@@ -74,7 +77,7 @@ What follows is an example of configuration .cfg INI file used by this script:
 	password = YYYYYYY
 
 This file can be stored as `/usr/local/etc/scihub.cfg` or `$HOME/.scihub.cfg` or
-splitted among them, as more convenient.
+splitted am:wong them, as more convenient.
    
 Note that you need to install a few pre-requisite packages in order to use this script,
 mainly pycurl, ogr, ElementTree and urllib.

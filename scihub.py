@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-#   Copyright (C) 2015 Francesco P. Lovergine <f.lovergine@ba.issia.cnr.it>
+#   Copyright (C) 2015-2016 Francesco P. Lovergine <f.lovergine@ba.issia.cnr.it>
 #
 #   This program is free software: you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
@@ -119,6 +119,45 @@ def testzip(filename):
 def isodate(date):
     iso = re.search('([0-9]{4}-[0-9]{2}-[0-9]{2})T([0-9]{2}:[0-9]{2}:[0-9]{2})(\.[0-9]+)?Z',date)
     return iso.group(1) + ' ' + iso.group(2)
+
+def norm_platform(val):
+    s1 = re.compile('[sS](entinel)?[-_]?1',re.IGNORECASE)
+    s2 = re.compile('[sS](entinel)?[-_]?2',re.IGNORECASE)
+    a = re.compile('any',re.IGNORECASE)
+    if s1.match(val):
+        return 'Sentinel-1'
+    if s2.match(val):
+        return 'Sentinel-2'
+    if a.match(val):
+        return 'Any'
+    raise ValueError("Invalid platform '%s'" % val)
+
+def norm_direction(val):
+    asc = re.compile('asc(ending)?',re.IGNORECASE)
+    desc = re.compile('desc(ending)?',re.IGNORECASE)
+    a = re.compile('any',re.IGNORECASE)
+    if asc.match(val):
+        return 'Ascending'
+    if desc.match(val):
+        return 'Descending'
+    if a.match(val):
+        return 'Any'
+    raise ValueError("Invalid direction '%s'" % val)
+
+def norm_type(val):
+    grd = re.compile('GRD(H)?',re.IGNORECASE)
+    slc = re.compile('SLC',re.IGNORECASE)
+    ms = re.compile('S2MSI1C|MS',re.IGNORECASE)
+    a = re.compile('any',re.IGNORECASE)
+    if grd.match(val):
+        return 'GRD'
+    if slc.match(val):
+        return 'Descending'
+    if ms.match(val):
+        return 'S2MSI1C'
+    if a.match(val):
+        return 'Any'
+    raise ValueError("Invalid type '%s'" % val)
 
 # The main Scientific Data Hub 
 
@@ -251,10 +290,17 @@ try:
     username = config.get('Authentication','username')
     password = config.get('Authentication','password')
     auth = username + ':' + password
+
+    general_platform = norm_platform(config.get('Global','platform'))
+    general_type = norm_type(config.get('Global','type'))
+    general_direction = norm_direction(config.get('Global','direction'))
+    general_ccperc = config.get('Global','cloudcoverpercentage')
+
     polygons = []
     polygons_items = config.items('Polygons')
     for key, polygon in polygons_items:
         polygons.append(polygon)
+
     types = []
     types_items = config.items('Types')
     for key, typ in types_items:
@@ -265,22 +311,24 @@ try:
         directions.append(direction)
     platforms = []
     platform_items = config.items('Platforms')
-    s1 = re.compile('[sS](entinel)?[-_]?1',re.IGNORECASE)
-    s2 = re.compile('[sS](entinel)?[-_]?2',re.IGNORECASE)
     for key, platform in platform_items:
-        p = 'Sentinel-1'
-        if s1.match(platform):
-            p = 'Sentinel-1'
-        if s2.match(platform):
-            p = 'Sentinel-2'
-        platforms.append(p)
+        platforms.append(platform)
 
-    if  len(types) != len(polygons) or len(directions) != len(polygons) or len(platforms) != len(polygons):
-        print 'Incorrect number of polygons, types, platforms and direction in configuration file'
-        sys.exit(6)
+    for i in range(len(polygons)):
+        try:
+            platforms[i] = norm_platform(platforms[i])
+        except IndexError:
+            platforms.append(general_platform)               
+        try:
+            types[i] = norm_type(types[i])
+        except IndexError:
+            types.append(general_type)               
+        try:
+            directions[i] = norm_direction(directions[i])
+        except IndexError:
+            directions.append(general_direction)               
 
-    if verbose:
-        for i in range(len(polygons)):
+        if verbose:
             print 'Polygon: %s, %s, %s, %s' % (polygons[i], platforms[i], types[i], directions[i])
 
 except configparser.Error, e:
@@ -290,6 +338,8 @@ except configparser.Error, e:
 if not len(auth):
     print 'Missing ESA SCIHUB authentication information'
     sys.exit(7)
+
+#sys.exit(10)
 
 cur = db.cursor()
 
