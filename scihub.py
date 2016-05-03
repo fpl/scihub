@@ -361,7 +361,7 @@ for i in range(len(polygons)):
 params = []
 for criterium in criteria:
     params.append({'q': '''ingestiondate:[%s TO NOW] AND platformname:%s AND producttype:%s AND orbitdirection:%s AND footprint:"Intersects(%s)"''' % \
-        (refdate, criterium['platform'], criterium['type'],criterium['direction'],criterium['polygon']), 'rows': '1000', 'start':'0'})
+        (refdate, criterium['platform'], criterium['type'],criterium['direction'],criterium['polygon']), 'rows': '1000000', 'start':'0'})
 
 # urls need encoding due to complexity of arguments
 
