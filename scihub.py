@@ -494,7 +494,8 @@ for product in products:
                         c.setopt(c.WRITEFUNCTION,f.write)
                         c.setopt(c.RESUME_FROM_LARGE,counter)
                         c.setopt(c.FAILONERROR,True)
-                        c.setopt(c.LOW_SPEED_LIMIT,1000)
+                        c.setopt(c.LOW_SPEED_LIMIT,100)
+                        c.setopt(c.LOW_SPEED_TIME,300)
                         try:
                             c.perform()
                             loop = False
