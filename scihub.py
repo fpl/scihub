@@ -492,8 +492,9 @@ for product in products:
                         c.setopt(c.SSL_VERIFYPEER, False)
                         c.setopt(c.USERPWD,auth)
                         c.setopt(c.WRITEFUNCTION,f.write)
-                        c.setopt(c.RESUME_FROM,counter)
+                        c.setopt(c.RESUME_FROM_LARGE,counter)
                         c.setopt(c.FAILONERROR,True)
+                        c.setopt(c.LOW_SPEED_LIMIT,1000)
                         try:
                             c.perform()
                             loop = False
