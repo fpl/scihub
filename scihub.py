@@ -471,7 +471,7 @@ for product in products:
         if data_download:
             data = "%s/Products('%s')/$value" % (servicebase, uniqid)
             filename = "%s.zip" % name
-            if overwrite or not os.path.exists(filename) or not zipfile.is_zipfile(filename) or not resume or (test and not testzip(filename)):
+            if overwrite or not os.path.exists(filename) or not zipfile.is_zipfile(filename) or (test and not testzip(filename)):
                 if verbose: 
                     print "downloading %s data file..." % name
 
