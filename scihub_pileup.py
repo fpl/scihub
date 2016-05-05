@@ -37,9 +37,9 @@ import math
 #
 
 def usage():
-    print '''usage: %s [-m master|-A area|-h|-d database|-a|-v|-t {GRD|SLC}|-W]
+    print '''usage: %s [-m master|-A area|-h|-d database|-a|-v|-t {GRD|SLC}|-W|-s|-k]
 [--master=master|--area=area|--help|--database=database|--warranty
- --auto|--verbose|--type=GRD|SLC]
+ --auto|--verbose|--type=GRD|SLC|--split|--kml]
 ''' % sys.argv[0]
 
 def help():
@@ -48,8 +48,9 @@ This is free software; see the source code for copying conditions.
 There is ABSOLUTELY NO WARRANTY; not even for MERCHANTABILITY or
 FITNESS FOR A PARTICULAR PURPOSE.  For details, use --warranty.
 
-usage: %s [-m master|-A area|-h|-d database|-a|-v|-t GRD|SLC|-W]
-[--master=master|--area=area|--help|--database=database|--auto|--verbose|--warranty]
+usage: %s [-m master|-A area|-h|-d database|-a|-v|-t (GRD|SLC)|-W|-s|-k]
+[--master=master|--area=area|--help|--database=database|--auto|
+--verbose|--warranty|--split|--kml]
 
 Options are:
 
@@ -61,6 +62,8 @@ Options are:
     -v --verbose
     -W --warranty
     -t --type=<SLC|GRD> [GRD]
+    -s --split
+    -k --kml
 ''' % sys.argv[0]
 
 def warranty():
@@ -93,11 +96,13 @@ verbose = False
 db_file = 'scihub.sqlite'
 auto = False
 ptype = 'GRD'
+split = False
+kml = False
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:],'m:A:hd:avt:W',
+    opts, args = getopt.getopt(sys.argv[1:],'m:A:hd:avt:Ws',
             ['master','area','help','database','auto','verbose','type',
-            'warranty'])
+            'warranty','split'])
 except getopt.GetoptError:
     help()
     sys.exit(3)
@@ -124,6 +129,10 @@ for opt, arg in opts:
     if opt in ['-W','--warranty']:
         warranty()
         sys.exit(2)
+    if opt in ['-s','--split']:
+        split = True
+    if opt in ['-k','--kml']:
+        kml = True
 
 if not auto and master == None:
     help()
@@ -138,7 +147,7 @@ except sqlite.Error, e:
 if not auto:
 
     cur = db.cursor()
-    cur.execute('''SELECT name,footprint,relorbitno,direction,ptype 
+    cur.execute('''SELECT name,footprint,relorbitno,direction,ptype,centroid_r1,relorbitno
                     FROM products WHERE platform = 'Sentinel-1' 
                     AND name = '%s' ORDER BY idate ASC LIMIT 1''' % (master))
     m = cur.fetchone()
@@ -147,7 +156,7 @@ if not auto:
         sys.exit(7)
 
     if verbose:
-        print m[0], m[1], 'MASTER', m[2], m[3], m[4]
+        print m[0], m[1], 'MASTER', m[2], m[3], m[4], m[5], m[6]
     else:
         print m[0]
 
@@ -166,7 +175,8 @@ if not auto:
     mpoly = ogr.CreateGeometryFromWkt(m[1])
     mpoly.Transform(trans)
 
-    for rec in cur.execute('''SELECT name,footprint,relorbitno,direction,ptype 
+    for rec in cur.execute('''SELECT name,footprint,relorbitno,direction,ptype,
+            centroid_r1, relorbitno
             FROM products WHERE platform = 'Sentinel-1' AND
             direction = '%s' AND name <> '%s' and ptype = '%s' 
             ORDER BY bdate ASC''' % (direction, master, ptype)):
@@ -175,24 +185,28 @@ if not auto:
         poly.Transform(trans)
 
         inters = mpoly.Intersection(poly)
+        centroid = ogr.CreateGeometryFromWkt(rec[5])
+        zone = int(math.ceil((centroid.GetX()+180.0)/6.0))
 
         if inters.GetArea()/kmq >= area: # kmq
             if verbose:
                 inters.Transform(invtrans)
                 print rec[0], rec[1], inters.ExportToWkt(), rec[2], rec[3], \
-                      rec[4], area
+                      rec[4], rec[5], area, rec[6], 'UTM' + zone
             else:
                 print rec[0]
     
 else:
     
     acur = db.cursor()
-    ascs = acur.execute('''SELECT name,footprint,relorbitno,direction,ptype 
+    ascs = acur.execute('''SELECT name,footprint,relorbitno,direction,ptype,
+            centroid_r1, relorbitno
             FROM products WHERE platform = 'Sentinel-1' AND
             direction = '%s' and ptype = '%s' ORDER BY bdate ASC''' %
             ('ASCENDING',ptype))
     bcur = db.cursor()
-    descs = bcur.execute('''SELECT name,footprint,relorbitno,direction,ptype 
+    descs = bcur.execute('''SELECT name,footprint,relorbitno,direction,ptype,
+            centroid_r1, relorbitno
             FROM products WHERE platform = 'Sentinel-1' AND
             direction = '%s' and ptype = '%s' ORDER BY bdate ASC''' %
             ('DESCENDING',ptype))
@@ -213,10 +227,14 @@ else:
     d_asc = {}
     d_desc = {}
     for asc in ascs:
-        d_asc[asc[0]] = [asc[1],asc[2],asc[3],asc[4]]
+        c = ogr.CreateGeometryFromWkt(asc[5])
+        zone = int(math.ceil((c.GetX()+180.0)/6.0))
+        d_asc[asc[0]] = [asc[1],asc[2],asc[3],asc[4],zone,asc[6]]
         aframes.add(asc[0])
     for desc in descs:
-        d_desc[desc[0]] = [desc[1],desc[2],desc[3],desc[4]]
+        c = ogr.CreateGeometryFromWkt(desc[5])
+        zone = int(math.ceil((c.GetX()+180.0)/6.0))
+        d_desc[desc[0]] = [desc[1],desc[2],desc[3],desc[4],zone,desc[6]]
         dframes.add(desc[0])
 
     # ascending frames 
@@ -279,14 +297,43 @@ else:
         acluster[clust].sort()
     for clust in dcluster:
         dcluster[clust].sort()
-    for clust in acluster:
-        print acluster[clust][0] + '\t' + '(ASC)'
-        for frame in acluster[clust]:
-            print '\t',frame
-    for clust in dcluster:
-        print dcluster[clust][0] + '\t' + '(DESC)'
-        for frame in dcluster[clust]:
-            print '\t',frame
+
+    if not split:
+        for clust in acluster:
+            print acluster[clust][0] + '\t' + '(ASC,UTM' + \
+                str(d_asc[acluster[clust][0]][4]) + ',' + \
+                str(d_asc[acluster[clust][0]][5]) + ')'
+            for frame in acluster[clust]:
+                print '\t',frame
+        for clust in dcluster:
+            print dcluster[clust][0] + '\t' + '(DSC,UTM' + \
+                str(d_desc[dcluster[clust][0]][4]) + ',' + \
+                str(d_asc[acluster[clust][0]][5]) + ')'
+
+            for frame in dcluster[clust]:
+                print '\t',frame
+    else:
+        for clust in acluster:
+            name = 'ASC.' + str(d_asc[acluster[clust][0]][5]) + '@' + \
+                    acluster[clust][0] + '.lst'
+            f = open(name,'w')
+            f.write(str(d_asc[acluster[clust][0]][4])+'\n')
+            for frame in acluster[clust]:
+                f.write(frame + '\n')
+            f.close()
+            if kml:
+                print "KML output still not implemented"
+
+        for clust in dcluster:
+            name = 'DSC.' + str(d_desc[dcluster[clust][0]][5]) + '@' + \
+                    dcluster[clust][0] + '.lst'
+            f = open(name,'w')
+            f.write(str(d_desc[dcluster[clust][0]][4])+'\n')
+            for frame in dcluster[clust]:
+                f.write(frame + '\n')
+            f.close()
+            if kml:
+                print "KML output still not implemented"
 
 db.close()
 sys.exit(0)
