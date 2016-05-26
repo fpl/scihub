@@ -220,7 +220,7 @@ for opt, arg in opts:
         data_download = True
     if opt in ['-v','--verbose']:
         verbose = True
-    if opt in ['-k','-kml']:
+    if opt in ['-k','--kml']:
         kml = True
     if opt in ['-l','--list']:
         output_list = True
