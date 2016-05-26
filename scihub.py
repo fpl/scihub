@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-#   Copyright (C) 2015 Francesco P. Lovergine <f.lovergine@ba.issia.cnr.it>
+#   Copyright (C) 2015-2016 Francesco P. Lovergine <f.lovergine@ba.issia.cnr.it>
 #
 #   This program is free software: you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
@@ -421,8 +421,10 @@ for product in products:
                         c.setopt(c.SSL_VERIFYPEER, False)
                         c.setopt(c.USERPWD,auth)
                         c.setopt(c.WRITEFUNCTION,f.write)
-                        c.setopt(c.RESUME_FROM,counter)
+                        c.setopt(c.RESUME_FROM_LARGE,counter)
                         c.setopt(c.FAILONERROR,True)
+                        c.setopt(c.LOW_SPEED_LIMIT,100)
+                        c.setopt(c.LOW_SPEED_TIME,300)
                         try:
                             c.perform()
                             loop = False
