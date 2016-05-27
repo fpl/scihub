@@ -152,7 +152,7 @@ def norm_type(val):
     if grd.match(val):
         return 'GRD'
     if slc.match(val):
-        return 'Descending'
+        return 'SLC'
     if ms.match(val):
         return 'S2MSI1C'
     if a.match(val):
