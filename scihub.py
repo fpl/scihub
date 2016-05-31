@@ -21,6 +21,21 @@
 # https://scihub.esa.int/userguide/BatchScripting
 #
 # An example of .cfg inifile used by this script:
+#	 [Global]
+#
+#	 ;
+#	 ; This sections contains default specs for parameters which can be
+#	 ; overriden for each polygon item
+#	 ;
+#
+#	 platform = Sentinel-1
+#	 type = SLC
+#	 direction = Any
+#    directory = /my/own/path/for/products
+#
+#	 ; this is only useful with S-2 images
+#
+#	 cloudcoverpercentage = 10
 #
 #    ;
 #    ; Polygons, types and directions need to be coherent each other and list
@@ -50,6 +65,10 @@
 #    direction1 = Descending
 #    direction2 = Ascending
 #    direction3 = ANY
+#
+#    [Directories]
+#
+#    directory1 = /alternative/path
 #    
 #    [Authentication]
 #    username = XXXXXXXX
@@ -77,13 +96,14 @@ import time
 import magic
 
 def usage():
-    print '''usage: %s [-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-m|-v|-o|-a|-r]''' % sys.argv[0]
+    print '''usage: %s [-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-m|-v|-o|-a|-r|-t|-R]''' % sys.argv[0]
 
 def help():
     print '''
-usage: %s [-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-a|-r|-t]
-          [--create|--download|--configuration=path|--data=path|--force|--help|--kml|
-           --list|--manifest|--verbose|--products=path|--overwrite|--alternative|--resume|--test]
+usage: %s [-1GGc|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-a|-r|-t|-R]
+          [--create|--download|--configuration=path|--data=path|--force|--help|
+           --kml|--list|--manifest|--verbose|--products=path|--overwrite|
+           --alternative|--resume|--test|--refresh]
     -c --create create db only
     -d --download download data .zip file
     -D --data= <path> name of SQLite database to use
@@ -99,6 +119,7 @@ usage: %s [-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-a|-r|-t]
     -a --alternative use the apihub alternative site
     -r --resume try using resume to continue download
     -t --test test ZIP file at check time
+    -R --refresh download missing/invalid/corrupted stuff on the basis of current db status
 
 An ESA SCIHUB username and password profile is required and read from a
 scihub configuration file, such as:
@@ -117,7 +138,7 @@ def testzip(filename):
         return False
 
 def isodate(date):
-    iso = re.search('([0-9]{4}-[0-9]{2}-[0-9]{2})T([0-9]{2}:[0-9]{2}:[0-9]{2})(\.[0-9]+)?Z',date)
+    iso = re.search('([0-9]{4}-[0-9]{2}-[0-9]{2})[T ]([0-9]{2}:[0-9]{2}:[0-9]{2})(\.[0-9]+)?Z?',date)
     return iso.group(1) + ' ' + iso.group(2)
 
 def norm_platform(val):
@@ -152,12 +173,13 @@ def norm_type(val):
     if grd.match(val):
         return 'GRD'
     if slc.match(val):
-        return 'Descending'
+        return 'SLC'
     if ms.match(val):
         return 'S2MSI1C'
     if a.match(val):
         return 'Any'
     raise ValueError("Invalid type '%s'" % val)
+
 
 # The main Scientific Data Hub 
 
@@ -194,6 +216,13 @@ configuration_file = '/usr/local/etc/scihub.cfg'
 alternative = False
 resume = False
 test = False
+refresh = False
+
+default_direction = 'Ascending'
+default_platform = 'Sentinel-1'
+default_type = 'GRD'
+default_ccp = 10
+default_directory = '.'
 
 try:
     m = magic.open(magic.MAGIC_MIME_TYPE)
@@ -203,10 +232,10 @@ except AttributeError,e:
     m.file = m.from_file
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:],'cvfdhmklD:L:C:oart',
+    opts, args = getopt.getopt(sys.argv[1:],'cvfdhmklD:L:C:oartR',
             ['create','verbose','force','download','help','manifest','kml',
                 'list','data=','products=','configuration=','overwrite',
-                'alternative','resume','test'])
+                'alternative','resume','test','refresh'])
 except getopt.GetoptError:
     usage()
     sys.exit(3)
@@ -241,6 +270,9 @@ for opt, arg in opts:
         resume = True
     if opt in ['-t','--test']:
         test = True
+    if opt in ['-R','--refresh']:
+        refresh = True
+        force = True
     if opt in ['-h','--help']:
         help()
         sys.exit(5)
@@ -285,149 +317,192 @@ if alternative:
 
 try:
     config = configparser.ConfigParser()
-    config.read([configuration_file, os.path.expanduser('~/.scihub.cfg')])
+    config.read([configuration_file,os.path.expanduser('~/.scihub.cfg')])
 
     username = config.get('Authentication','username')
     password = config.get('Authentication','password')
     auth = username + ':' + password
+except configparser.Error, e:
+    print 'Error parsing configuration file: %s' % e
+    sys.exit(4)
 
+general_platform = None
+general_type = None
+general_direction = None
+general_ccperc = None
+general_directory = None
+try:
     general_platform = norm_platform(config.get('Global','platform'))
     general_type = norm_type(config.get('Global','type'))
     general_direction = norm_direction(config.get('Global','direction'))
     general_ccperc = config.get('Global','cloudcoverpercentage')
+    general_directory = config.get('Global','directory')
+except configparser.Error, e:
+    pass
+if general_platform:
+    default_platform = general_platform
+if general_direction:
+    default_direction = general_direction
+if general_type:
+    default_type = general_type
+if general_ccperc:
+    default_ccp = general_ccperc
+if general_directory:
+    default_directory = general_directory
 
-    polygons = []
-    polygons_items = config.items('Polygons')
-    for key, polygon in polygons_items:
-        polygons.append(polygon)
 
-    types = []
+polygons = []
+types = []
+directions = []
+platforms = []
+directories = []
+
+polygons_items = config.items('Polygons')
+for key, polygon in polygons_items:
+    polygons.append(polygon)
+
+try:
     types_items = config.items('Types')
     for key, typ in types_items:
         types.append(typ)
-    directions = []
     directions_items = config.items('Directions')
     for key, direction in directions_items:
         directions.append(direction)
-    platforms = []
     platform_items = config.items('Platforms')
     for key, platform in platform_items:
         platforms.append(platform)
+    directory_items = config.items('Directories')
+    for key, directory in directory_items:
+        directories.append(directory)
+except:
+    pass
 
-    for i in range(len(polygons)):
-        try:
-            platforms[i] = norm_platform(platforms[i])
-        except IndexError:
-            platforms.append(general_platform)               
-        try:
-            types[i] = norm_type(types[i])
-        except IndexError:
-            types.append(general_type)               
-        try:
-            directions[i] = norm_direction(directions[i])
-        except IndexError:
-            directions.append(general_direction)               
+for i in range(len(polygons)):
+    try:
+        platforms[i] = norm_platform(platforms[i])
+    except IndexError:
+        platforms.append(default_platform)
+    try:
+        types[i] = norm_type(types[i])
+    except IndexError:
+        types.append(default_type)
+    try:
+        directions[i] = norm_direction(directions[i])
+    except IndexError:
+        directions.append(default_direction)
+    try:
+        directories[i] = os.path.abspath(directories[i])
+    except IndexError:
+        directories.append(os.path.abspath(default_directory))
 
-        if verbose:
-            print 'Polygon: %s, %s, %s, %s' % (polygons[i], platforms[i], types[i], directions[i])
-
-except configparser.Error, e:
-    print 'Error parsing configuration file: %s' % e
-    sys.exit(4)
+    if verbose:
+        print 'Polygon: %s, %s, %s, %s, %s' % \
+            (polygons[i], platforms[i], types[i], directions[i],directories[i])
 
 if not len(auth):
     print 'Missing ESA SCIHUB authentication information'
     sys.exit(7)
 
-#sys.exit(10)
 
-cur = db.cursor()
+if not refresh:
 
-cur.execute('''select date(idate) as d from products order by d desc limit 1''')
-last = cur.fetchone()
-if last is None or force:
-    last = []
-    last.append('2014-01-01')
+    cur = db.cursor()
+    cur.execute('''select date(idate) as d from products order by d desc limit 1''')
+    last = cur.fetchone()
+    if last is None or force:
+        last = []
+        last.append('2014-01-01')
 
-if verbose:
-    print 'Latest ingestion date considered: %s' % last[0]
-
-refdate = last[0] + 'T00:00:00.000Z'
-
-criteria = []
-for i in range(len(polygons)):
-    criteria.append({'platform':platforms[i] , 'type':types[i], 'direction': directions[i], 'polygon':polygons[i]})
-
-params = []
-for criterium in criteria:
-    params.append({'q': '''ingestiondate:[%s TO NOW] AND platformname:%s AND producttype:%s AND orbitdirection:%s AND footprint:"Intersects(%s)"''' % \
-        (refdate, criterium['platform'], criterium['type'],criterium['direction'],criterium['polygon']), 'rows': '1000000', 'start':'0'})
-
-# urls need encoding due to complexity of arguments
-
-urls = []
-for param in params:
-    urls.append(searchbase + '?' + urllib.urlencode(param))
-
-for url in urls:
-    buffer = StringIO()
-    c = pycurl.Curl()
-    c.setopt(c.URL,str(url))
-    c.setopt(c.USERPWD,auth)
-    c.setopt(c.FOLLOWLOCATION, True)
-    c.setopt(c.SSL_VERIFYPEER, False)
-    c.setopt(c.WRITEFUNCTION,buffer.write)
     if verbose:
-        print "get %s..." % url
-    c.perform()
-    c.close()
+        print 'Latest ingestion date considered: %s' % last[0]
 
-    body = buffer.getvalue()
-    if output_list:
-        print body + '\n'
-    try:
-        root = et.fromstring(body)
-    except et.ParseError:
-        print(body)
-        sys.exit(2)
+    refdate = last[0] + 'T00:00:00.000Z'
 
-    for entry in root.iter('{http://www.w3.org/2005/Atom}entry'):
-        id = entry.find('{http://www.w3.org/2005/Atom}id').text
-        title = entry.find('{http://www.w3.org/2005/Atom}title').text
-        footprint = ''
-        orbitdirection = ''
-        producttype = ''
-        beginposition = ''
-        endposition = ''
-        ingdate = ''
-        for string in entry.iter('{http://www.w3.org/2005/Atom}str'):
-            if string.attrib.has_key('name'):
-                if string.attrib['name'] == 'footprint':
-                    footprint = string.text
-                if string.attrib['name'] == 'orbitdirection':
-                    orbitdirection = string.text
-                if string.attrib['name'] == 'producttype':
-                    producttype = string.text
-                if string.attrib['name'] == 'platformname':
-                    platform = string.text
-        for string in entry.iter('{http://www.w3.org/2005/Atom}date'):
-            if string.attrib.has_key('name'):
-                if string.attrib['name'] == 'ingestiondate':
-                    ingdate = string.text
-                if string.attrib['name'] == 'beginposition':
-                    beginposition = string.text
-                if string.attrib['name'] == 'endposition':
-                    endposition = string.text
-        for string in entry.iter('{http://www.w3.org/2005/Atom}int'):
-            if string.attrib.has_key('name'):
-                if string.attrib['name'] == 'orbitnumber':
-                    orbitno = string.text
-                if string.attrib['name'] == 'relativeorbitnumber':
-                    relorbitno = string.text
-        products.append([id,title,ingdate,footprint,beginposition,endposition,orbitdirection,producttype,orbitno,relorbitno,platform])
+    criteria = []
+    for i in range(len(polygons)):
+        criteria.append({'platform':platforms[i] , \
+                         'type':types[i], 'direction': directions[i], \
+                         'polygon':polygons[i]})
+
+    params = []
+    for criterium in criteria:
+        params.append({'q': '''ingestiondate:[%s TO NOW] AND platformname:%s AND producttype:%s AND orbitdirection:%s AND footprint:"Intersects(%s)"''' % \
+            (refdate, criterium['platform'], criterium['type'], \
+             criterium['direction'],criterium['polygon']), \
+             'rows': '1000000', 'start':'0'})
+
+    # urls need encoding due to complexity of arguments
+
+    urls = []
+    for param in params:
+        urls.append(searchbase + '?' + urllib.urlencode(param))
+
+    for url in urls:
+        buffer = StringIO()
+        c = pycurl.Curl()
+        c.setopt(c.URL,str(url))
+        c.setopt(c.USERPWD,auth)
+        c.setopt(c.FOLLOWLOCATION, True)
+        c.setopt(c.SSL_VERIFYPEER, False)
+        c.setopt(c.WRITEFUNCTION,buffer.write)
         if verbose:
-            print id, title, ingdate, footprint, beginposition, endposition, \
-                    orbitdirection, producttype, orbitno, relorbitno, platform
+            print "get %s..." % url
+        c.perform()
+        c.close()
+
+        body = buffer.getvalue()
+        if output_list:
+            print body + '\n'
+        try:
+            root = et.fromstring(body)
+        except et.ParseError:
+            print(body)
+            sys.exit(2)
+
+        for entry in root.iter('{http://www.w3.org/2005/Atom}entry'):
+            id = entry.find('{http://www.w3.org/2005/Atom}id').text
+            title = entry.find('{http://www.w3.org/2005/Atom}title').text
+            footprint = ''
+            orbitdirection = ''
+            producttype = ''
+            beginposition = ''
+            endposition = ''
+            ingdate = ''
+            for string in entry.iter('{http://www.w3.org/2005/Atom}str'):
+                if string.attrib.has_key('name'):
+                    if string.attrib['name'] == 'footprint':
+                        footprint = string.text
+                    if string.attrib['name'] == 'orbitdirection':
+                        orbitdirection = string.text
+                    if string.attrib['name'] == 'producttype':
+                        producttype = string.text
+                    if string.attrib['name'] == 'platformname':
+                        platform = string.text
+            for string in entry.iter('{http://www.w3.org/2005/Atom}date'):
+                if string.attrib.has_key('name'):
+                    if string.attrib['name'] == 'ingestiondate':
+                        ingdate = string.text
+                    if string.attrib['name'] == 'beginposition':
+                        beginposition = string.text
+                    if string.attrib['name'] == 'endposition':
+                        endposition = string.text
+            for string in entry.iter('{http://www.w3.org/2005/Atom}int'):
+                if string.attrib.has_key('name'):
+                    if string.attrib['name'] == 'orbitnumber':
+                        orbitno = string.text
+                    if string.attrib['name'] == 'relativeorbitnumber':
+                        relorbitno = string.text
+            products.append([id,title,ingdate,footprint,beginposition,endposition,orbitdirection,producttype,orbitno,relorbitno,platform])
+            if verbose:
+                print products[-1]
+else:
+
+    cur = db.cursor()
+    for entry in cur.execute('''SELECT * FROM products order by idate desc'''):
+        products.append([entry[1],entry[2],entry[3],entry[10],entry[4], \
+            entry[5],entry[7],entry[6],entry[8],entry[9],entry[11]])
+        if verbose:
+            print products[-1]
 
 cur = db.cursor()
 
@@ -548,15 +623,18 @@ Platform = $[PlatformName]
             kmlfile = open(name+'.kml','w')
             kmlfile.write(buff)
             kmlfile.close()
+            if verbose:
+                print "KML file %s created" % name+'.kml'
 
-        simple = shapely.wkt.loads(footprint)
-        footprint_r1 = shapely.wkt.dumps(simple,rounding_precision=1)
-        centroid_r1 = shapely.wkt.dumps(simple.centroid,rounding_precision=1)
-        cur.execute('''INSERT OR REPLACE INTO products 
-                (id,hash,name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,footprint,platform,footprint_r1,centroid_r1) 
-                VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?)''', 
-                (uniqid,name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,footprint,platform,footprint_r1,centroid_r1))
-        db.commit()
+        if not refresh:
+            simple = shapely.wkt.loads(footprint)
+            footprint_r1 = shapely.wkt.dumps(simple,rounding_precision=1)
+            centroid_r1 = shapely.wkt.dumps(simple.centroid,rounding_precision=1)
+            cur.execute('''INSERT OR REPLACE INTO products 
+                    (id,hash,name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,footprint,platform,footprint_r1,centroid_r1) 
+                    VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?)''', 
+                    (uniqid,name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,footprint,platform,footprint_r1,centroid_r1))
+            db.commit()
     else:
         if verbose:
             print "skipping %s" % name
