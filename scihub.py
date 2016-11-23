@@ -430,12 +430,12 @@ if not refresh:
             params.append({'q': '''ingestiondate:[%s TO NOW] AND platformname:%s AND producttype:%s AND orbitdirection:%s AND footprint:"Intersects(%s)"''' % \
                 (refdate, criterium['platform'], criterium['type'], \
                  criterium['direction'],criterium['polygon']), \
-                 'rows': '100', 'start':'0'})
+                 })
         else:
             params.append({'q': '''ingestiondate:[%s TO NOW] AND platformname:%s AND producttype:%s AND footprint:"Intersects(%s)"''' % \
                 (refdate, criterium['platform'], criterium['type'], \
                  criterium['polygon']), \
-                 'rows': '100', 'start':'0'})
+                 })
 
     # urls need encoding due to complexity of arguments
 
@@ -444,63 +444,72 @@ if not refresh:
         urls.append(searchbase + '?' + urllib.urlencode(param))
 
     for url in urls:
-        buffer = StringIO()
-        c = pycurl.Curl()
-        c.setopt(c.URL,str(url))
-        c.setopt(c.USERPWD,auth)
-        c.setopt(c.FOLLOWLOCATION, True)
-        c.setopt(c.SSL_VERIFYPEER, False)
-        c.setopt(c.WRITEFUNCTION,buffer.write)
-        if verbose:
-            print "get %s..." % url
-        c.perform()
-        c.close()
-
-        body = buffer.getvalue()
-        if output_list:
-            print body + '\n'
-        try:
-            root = et.fromstring(body)
-        except et.ParseError:
-            print(body)
-            sys.exit(2)
-
-        for entry in root.iter('{http://www.w3.org/2005/Atom}entry'):
-            id = entry.find('{http://www.w3.org/2005/Atom}id').text
-            title = entry.find('{http://www.w3.org/2005/Atom}title').text
-            footprint = ''
-            orbitdirection = ''
-            producttype = ''
-            beginposition = ''
-            endposition = ''
-            ingdate = ''
-            for string in entry.iter('{http://www.w3.org/2005/Atom}str'):
-                if string.attrib.has_key('name'):
-                    if string.attrib['name'] == 'footprint':
-                        footprint = string.text
-                    if string.attrib['name'] == 'orbitdirection':
-                        orbitdirection = string.text
-                    if string.attrib['name'] == 'producttype':
-                        producttype = string.text
-                    if string.attrib['name'] == 'platformname':
-                        platform = string.text
-            for string in entry.iter('{http://www.w3.org/2005/Atom}date'):
-                if string.attrib.has_key('name'):
-                    if string.attrib['name'] == 'ingestiondate':
-                        ingdate = string.text
-                    if string.attrib['name'] == 'beginposition':
-                        beginposition = string.text
-                    if string.attrib['name'] == 'endposition':
-                        endposition = string.text
-            for string in entry.iter('{http://www.w3.org/2005/Atom}int'):
-                if string.attrib.has_key('name'):
-                    if string.attrib['name'] == 'orbitnumber':
-                        orbitno = string.text
-                    if string.attrib['name'] == 'relativeorbitnumber':
-                        relorbitno = string.text
-            products.append([id,title,ingdate,footprint,beginposition,endposition,orbitdirection,producttype,orbitno,relorbitno,platform])
+        page = 0
+        while True: 
+            stop = True
+            page_url = url + '&' + urllib.urlencode({'rows': 100,'start' : page*100})
+            buffer = StringIO()
+            c = pycurl.Curl()
+            c.setopt(c.URL,str(page_url))
+            c.setopt(c.USERPWD,auth)
+            c.setopt(c.FOLLOWLOCATION, True)
+            c.setopt(c.SSL_VERIFYPEER, False)
+            c.setopt(c.WRITEFUNCTION,buffer.write)
             if verbose:
-                print products[-1]
+                print "get %s..." % page_url
+            c.perform()
+            c.close()
+
+            body = buffer.getvalue()
+            if output_list:
+                print body + '\n'
+            try:
+                root = et.fromstring(body)
+            except et.ParseError:
+                print(body)
+                sys.exit(2)
+
+            for entry in root.iter('{http://www.w3.org/2005/Atom}entry'):
+                id = entry.find('{http://www.w3.org/2005/Atom}id').text
+                title = entry.find('{http://www.w3.org/2005/Atom}title').text
+                footprint = ''
+                orbitdirection = ''
+                producttype = ''
+                beginposition = ''
+                endposition = ''
+                ingdate = ''
+                for string in entry.iter('{http://www.w3.org/2005/Atom}str'):
+                    if string.attrib.has_key('name'):
+                        if string.attrib['name'] == 'footprint':
+                            footprint = string.text
+                        if string.attrib['name'] == 'orbitdirection':
+                            orbitdirection = string.text
+                        if string.attrib['name'] == 'producttype':
+                            producttype = string.text
+                        if string.attrib['name'] == 'platformname':
+                            platform = string.text
+                for string in entry.iter('{http://www.w3.org/2005/Atom}date'):
+                    if string.attrib.has_key('name'):
+                        if string.attrib['name'] == 'ingestiondate':
+                            ingdate = string.text
+                        if string.attrib['name'] == 'beginposition':
+                            beginposition = string.text
+                        if string.attrib['name'] == 'endposition':
+                            endposition = string.text
+                for string in entry.iter('{http://www.w3.org/2005/Atom}int'):
+                    if string.attrib.has_key('name'):
+                        if string.attrib['name'] == 'orbitnumber':
+                            orbitno = string.text
+                        if string.attrib['name'] == 'relativeorbitnumber':
+                            relorbitno = string.text
+                products.append([id,title,ingdate,footprint,beginposition,endposition,orbitdirection,producttype,orbitno,relorbitno,platform])
+                # still products available, guess we can query again...
+                stop = False
+                if verbose:
+                    print products[-1]
+            page = page + 1
+            if stop:
+                break
 else:
 
     cur = db.cursor()
