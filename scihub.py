@@ -426,10 +426,16 @@ if not refresh:
 
     params = []
     for criterium in criteria:
-        params.append({'q': '''ingestiondate:[%s TO NOW] AND platformname:%s AND producttype:%s AND orbitdirection:%s AND footprint:"Intersects(%s)"''' % \
-            (refdate, criterium['platform'], criterium['type'], \
-             criterium['direction'],criterium['polygon']), \
-             'rows': '1000000', 'start':'0'})
+        if criterium['direction'] in ['ASCENDING','DESCENDING']:
+            params.append({'q': '''ingestiondate:[%s TO NOW] AND platformname:%s AND producttype:%s AND orbitdirection:%s AND footprint:"Intersects(%s)"''' % \
+                (refdate, criterium['platform'], criterium['type'], \
+                 criterium['direction'],criterium['polygon']), \
+                 'rows': '100', 'start':'0'})
+        else:
+            params.append({'q': '''ingestiondate:[%s TO NOW] AND platformname:%s AND producttype:%s AND footprint:"Intersects(%s)"''' % \
+                (refdate, criterium['platform'], criterium['type'], \
+                 criterium['polygon']), \
+                 'rows': '100', 'start':'0'})
 
     # urls need encoding due to complexity of arguments
 
@@ -610,6 +616,7 @@ Platform = $[PlatformName]
 <Data name="Name"><value>%s</value></Data>
 <Data name="IngestionDate"><value>%s</value></Data>
 <Data name="BeginDate"><value>%s</value></Data>
+POLYGON ((16.109991690647313 41.206032524724726,17.018216775067064 40.768332783258948,16.881983012404099 40.629262091294045,15.978997688086771 41.042889149476473,16.109991690647313 41.206032524724726))
 <Data name="EndDate"><value>%s</value></Data>
 <Data name="ProductType"><value>%s</value></Data>
 <Data name="OrbitDirection"><value>%s</value></Data>
