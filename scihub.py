@@ -640,7 +640,7 @@ POLYGON ((16.109991690647313 41.206032524724726,17.018216775067064 40.7683327832
             kmlfile.write(buff)
             kmlfile.close()
             if verbose:
-                print "KML file %s created" % name+'.kml'
+                print "KML file %s.kml created" % name
 
         if not refresh:
             simple = shapely.wkt.loads(footprint)
