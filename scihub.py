@@ -100,7 +100,7 @@ def usage():
 
 def help():
     print '''
-usage: %s [-1GGc|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-a|-r|-t|-R]
+usage: %s [-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-a|-r|-t|-R]
           [--create|--download|--configuration=path|--data=path|--force|--help|
            --kml|--list|--manifest|--verbose|--products=path|--overwrite|
            --alternative|--resume|--test|--refresh]
