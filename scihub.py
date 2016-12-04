@@ -97,28 +97,27 @@ import magic
 import dateutil.parser
 
 def usage():
-    print '''usage: %s [-b|-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-m|-v|-o|-a|-r|-t|-R]''' % sys.argv[0]
+    print '''usage: %s [-b date|-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-m|-v|-o|-r|-t|-R]''' % sys.argv[0]
 
 def help():
     print '''
-usage: %s [-b|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-a|-r|-t|-R]
+usage: %s [-b date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-r|-t|-R]
           [--create|--download|--configuration=path|--data=path|--force|--help|
            --kml|--list|--manifest|--verbose|--products=path|--overwrite|
-           --alternative|--resume|--test|--refresh]
-    -b --begin=<date> begin date to consider for products
+           --resume|--test|--refresh]
+    -b --begin= <date> begin date to consider for products
     -c --create create db only
     -d --download download data .zip file
-    -D --data=<path> name of SQLite database to use
-    -C --configuration=<path> configuration file to use
+    -D --data= <path> name of SQLite database to use
+    -C --configuration= <path> configuration file to use
     -f --force force
     -h --help this help
     -k --kml create KML skeleton addon files
     -l --list output XML list of entries
     -m --manifest download manifest files
     -v --verbose run verbosely
-    -L --products=<path> output products names to file
+    -L --products= <path> output products names to file
     -o --overwrite overwrite data .zip file even if it exists
-    -a --alternative use the apihub alternative site
     -r --resume try using resume to continue download
     -t --test test ZIP file at check time
     -R --refresh download missing/invalid/corrupted stuff on the basis of current db status
@@ -127,8 +126,12 @@ An ESA SCIHUB username and password profile is required and read from a
 scihub configuration file, such as:
 
     [Autentication]
-    username = <user>
+    username = <user>[@realm]
     password = <xxxx>
+
+Note that different realms can be used if the user is able to access not only
+the main SciHub server but any other regional mirror or Collaborative Ground
+Segment. If not specified, the main ESA one will be used.
 ''' % sys.argv[0]
 
 def testzip(filename):
@@ -182,25 +185,22 @@ def norm_type(val):
         return 'Any'
     raise ValueError("Invalid type '%s'" % val)
 
-
-# The main Scientific Data Hub 
-
-searchbase = 'https://scihub.copernicus.eu/dhus/search'
-servicebase = 'https://scihub.copernicus.eu/dhus/odata/v1'
-
-# The alternative API Hub is dedicated to users of the scripting interface. 
-# The API Hub Access is currently available only for users registered before the
-# 20th of November 12:00 UTC, the user credentials as of the 20th November are 
-# valid to access this site.
-# The API Hub is managed with the same quota restrictions, ie. a limit
-# of two parallel downloads per user. The site is publishing precisely
-# the same data content as the Scientific Data Hub (both Sentinel-1 and
-# Sentinel-2), with all new data as of the 16th November. A rolling policy
-# for the Hub will be established following the first month of monitored
-# operations.
-
-alt_searchbase = 'https://scihub.copernicus.eu/apihub/search'
-alt_servicebase = 'https://scihub.copernicus.eu/apihub/odata/v1'
+realms = {
+    'apihub' : {
+            'searchbase' : 'https://scihub.copernicus.eu/apihub/search',
+            'servicebase' : 'https://scihub.copernicus.eu/apihub/odata/v1'
+    },
+    'main' : {
+        'searchbase' : 'https://scihub.copernicus.eu/dhus/search',
+        'servicebase' : 'https://scihub.copernicus.eu/dhus/odata/v1'
+    },
+    'asi.it' : {
+        'searchbase' : 'http://http://collaborative.mt.asi.it/search',
+        'servicebase' : 'http://collaborative.mt.asi.it/odata/v1'
+    },
+}
+searchbase = realms['main']['searchbase']
+servicebase = realms['main']['servicebase']
 
 products = []
 
@@ -235,10 +235,10 @@ except AttributeError,e:
     m.file = m.from_file
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:],'b:cvfdhmklD:L:C:oartR',
+    opts, args = getopt.getopt(sys.argv[1:],'b:cvfdhmklD:L:C:ortR',
             ['begin=','create','verbose','force','download','help','manifest','kml',
                 'list','data=','products=','configuration=','overwrite',
-                'alternative','resume','test','refresh'])
+                'resume','test','refresh'])
 except getopt.GetoptError:
     usage()
     sys.exit(3)
@@ -270,8 +270,6 @@ for opt, arg in opts:
         configuration_file = arg
     if opt in ['-o','--overwrite']:
         overwrite = True
-    if opt in ['-a','--alternative']:
-        alternative = True
     if opt in ['-r','--resume']:
         resume = True
     if opt in ['-t','--test']:
@@ -317,17 +315,22 @@ if create_db:
 
 auth = ''
 
-if alternative:
-    searchbase = alt_searchbase
-    servicebase = alt_servicebase 
-
 try:
     config = configparser.ConfigParser()
     config.read([configuration_file,os.path.expanduser('~/.scihub.cfg')])
 
-    username = config.get('Authentication','username')
+    username = re.search('([^@]+)@?(.*)',config.get('Authentication','username'))
+    user = username.group(1)
+    realm = username.group(2)
+    if realm:
+        try:
+            searchbase = realms[realm]['searchbase']
+            servicebase = realms[realm]['servicebase']
+        except KeyError:
+            print 'Realm not found: %s' % realm
+            sys.exit(6)
     password = config.get('Authentication','password')
-    auth = username + ':' + password
+    auth = user + ':' + password
 except configparser.Error, e:
     print 'Error parsing configuration file: %s' % e
     sys.exit(4)
