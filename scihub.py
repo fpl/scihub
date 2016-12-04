@@ -94,27 +94,29 @@ import zipfile
 import re
 import time
 import magic
+import dateutil.parser
 
 def usage():
-    print '''usage: %s [-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-m|-v|-o|-a|-r|-t|-R]''' % sys.argv[0]
+    print '''usage: %s [-b|-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-m|-v|-o|-a|-r|-t|-R]''' % sys.argv[0]
 
 def help():
     print '''
-usage: %s [-1GGc|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-a|-r|-t|-R]
+usage: %s [-b|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-a|-r|-t|-R]
           [--create|--download|--configuration=path|--data=path|--force|--help|
            --kml|--list|--manifest|--verbose|--products=path|--overwrite|
            --alternative|--resume|--test|--refresh]
+    -b --begin=<date> begin date to consider for products
     -c --create create db only
     -d --download download data .zip file
-    -D --data= <path> name of SQLite database to use
-    -C --configuration= <path> configuration file to use
+    -D --data=<path> name of SQLite database to use
+    -C --configuration=<path> configuration file to use
     -f --force force
     -h --help this help
     -k --kml create KML skeleton addon files
     -l --list output XML list of entries
     -m --manifest download manifest files
     -v --verbose run verbosely
-    -L --products= <path> output products names to file
+    -L --products=<path> output products names to file
     -o --overwrite overwrite data .zip file even if it exists
     -a --alternative use the apihub alternative site
     -r --resume try using resume to continue download
@@ -217,6 +219,7 @@ alternative = False
 resume = False
 test = False
 refresh = False
+begin_date = '2014-01-01'
 
 default_direction = 'Ascending'
 default_platform = 'Sentinel-1'
@@ -243,6 +246,9 @@ except getopt.GetoptError:
 for opt, arg in opts:
     if opt in ['-m','--manifest']:
         manifest_download = True
+    if opt in ['-b','--begin']:
+        d = dateutil.parser.parse(arg)
+        begin_date = '%s-%s-%s' % (d.year,d.month,d.day)
     if opt in ['-c','--create']:
         create_db = True
     if opt in ['-d','--download']:
@@ -411,7 +417,7 @@ if not refresh:
     last = cur.fetchone()
     if last is None or force:
         last = []
-        last.append('2014-01-01')
+        last.append(begin_date)
 
     if verbose:
         print 'Latest ingestion date considered: %s' % last[0]
