@@ -235,8 +235,8 @@ except AttributeError,e:
     m.file = m.from_file
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:],'bcvfdhmklD:L:C:oartR',
-            ['begin','create','verbose','force','download','help','manifest','kml',
+    opts, args = getopt.getopt(sys.argv[1:],'b:cvfdhmklD:L:C:oartR',
+            ['begin=','create','verbose','force','download','help','manifest','kml',
                 'list','data=','products=','configuration=','overwrite',
                 'alternative','resume','test','refresh'])
 except getopt.GetoptError:
