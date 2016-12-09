@@ -187,8 +187,8 @@ def norm_type(val):
 
 realms = {
     'apihub' : {
-            'searchbase' : 'https://scihub.copernicus.eu/apihub/search',
-            'servicebase' : 'https://scihub.copernicus.eu/apihub/odata/v1'
+        'searchbase' : 'https://scihub.copernicus.eu/apihub/search',
+        'servicebase' : 'https://scihub.copernicus.eu/apihub/odata/v1'
     },
     'main' : {
         'searchbase' : 'https://scihub.copernicus.eu/dhus/search',
