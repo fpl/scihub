@@ -195,8 +195,12 @@ realms = {
         'servicebase' : 'https://scihub.copernicus.eu/dhus/odata/v1'
     },
     'asi.it' : {
-        'searchbase' : 'http://http://collaborative.mt.asi.it/search',
+        'searchbase' : 'http://collaborative.mt.asi.it/search',
         'servicebase' : 'http://collaborative.mt.asi.it/odata/v1'
+    },
+    'noa.gr' : {
+        'searchbase' : 'https://sentinels.space.noa.gr/dhus/search',
+        'servicebase' : 'https://sentinels.space.noa.gr/dhus/odata/v1'
     },
 }
 searchbase = realms['main']['searchbase']
