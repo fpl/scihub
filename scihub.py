@@ -186,11 +186,11 @@ def norm_type(val):
     raise ValueError("Invalid type '%s'" % val)
 
 realms = {
-    'apihub' : {
+    'apihub.esa.int' : {
         'searchbase' : 'https://scihub.copernicus.eu/apihub/search',
         'servicebase' : 'https://scihub.copernicus.eu/apihub/odata/v1'
     },
-    'main' : {
+    'esa.int' : {
         'searchbase' : 'https://scihub.copernicus.eu/dhus/search',
         'servicebase' : 'https://scihub.copernicus.eu/dhus/odata/v1'
     },
@@ -203,8 +203,8 @@ realms = {
         'servicebase' : 'https://sentinels.space.noa.gr/dhus/odata/v1'
     },
 }
-searchbase = realms['main']['searchbase']
-servicebase = realms['main']['servicebase']
+searchbase = realms['apihub.esa.int']['searchbase']
+servicebase = realms['apihub.esa.int']['servicebase']
 
 products = []
 
