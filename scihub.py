@@ -199,8 +199,8 @@ servicebase = 'https://scihub.copernicus.eu/dhus/odata/v1'
 # for the Hub will be established following the first month of monitored
 # operations.
 
-alt_searchbase = 'https://scihub.copernicus.eu/apihub/search'
-alt_servicebase = 'https://scihub.copernicus.eu/apihub/odata/v1'
+alt_searchbase = 'http://collaborative.mt.asi.it/search'
+alt_servicebase = 'http://collaborative.mt.asi.it/odata/v1'
 
 products = []
 
