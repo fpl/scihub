@@ -97,19 +97,11 @@ import magic
 import dateutil.parser
 
 def usage():
-<<<<<<< HEAD
-    print '''usage: %s [-b date|-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-m|-v|-o|-a|-r|-t|-R]''' % sys.argv[0]
-
-def help():
-    print '''
-usage: %s [-b date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-a|-r|-t|-R]
-=======
     print '''usage: %s [-b date|-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-m|-v|-o|-r|-t|-R]''' % sys.argv[0]
 
 def help():
     print '''
 usage: %s [-b date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-r|-t|-R]
->>>>>>> sensagri
           [--create|--download|--configuration=path|--data=path|--force|--help|
            --kml|--list|--manifest|--verbose|--products=path|--overwrite|
            --resume|--test|--refresh]
