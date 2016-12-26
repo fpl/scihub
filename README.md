@@ -27,6 +27,9 @@ but it is quite complete, thanks to a series of features:
  * it is free software and can be extended easily for better purposes
  * it is currently used in production and it works!
 
+Currently, the main use case of this script is the periodic downloading
+of images on one ore more areas, typically by means of a crontab job.
+
 What follows is an example of configuration .cfg INI file used by this script:
 
 	[Global]
