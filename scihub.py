@@ -198,6 +198,10 @@ realms = {
         'searchbase' : 'http://collaborative.mt.asi.it/search',
         'servicebase' : 'http://collaborative.mt.asi.it/odata/v1'
     },
+    'fmi.fi' : {
+        'searchbase' : 'https://finhub.nsdc.fmi.fi/search',
+        'servicebase' : 'https://finhub.nsdc.fmi.fi/odata/v1'
+    },
     'noa.gr' : {
         'searchbase' : 'https://sentinels.space.noa.gr/dhus/search',
         'servicebase' : 'https://sentinels.space.noa.gr/dhus/odata/v1'
