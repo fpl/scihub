@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-#   Copyright (C) 2015-2016 Francesco P. Lovergine <f.lovergine@ba.issia.cnr.it>
+#   Copyright (C) 2015-2017 Francesco P. Lovergine <francesco.lovergine@cnr.it>
 #
 #   This program is free software: you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
@@ -155,7 +155,7 @@ def norm_platform(val):
     if s2.match(val):
         return 'Sentinel-2'
     if a.match(val):
-        return 'Any'
+        return 'ANY'
     raise ValueError("Invalid platform '%s'" % val)
 
 def norm_direction(val):
@@ -167,22 +167,25 @@ def norm_direction(val):
     if desc.match(val):
         return 'Descending'
     if a.match(val):
-        return 'Any'
+        return 'ANY'
     raise ValueError("Invalid direction '%s'" % val)
 
 def norm_type(val):
-    grd = re.compile('GRD(H)?',re.IGNORECASE)
-    slc = re.compile('SLC',re.IGNORECASE)
-    ms = re.compile('S2MSI1C|MS',re.IGNORECASE)
+    grd = re.compile('^GRD(H)?$',re.IGNORECASE)
+    slc = re.compile('^SLC$',re.IGNORECASE)
+    msl2 = re.compile('^S2MSI2A|MSIL2$',re.IGNORECASE)
+    msl1 = re.compile('^S2MSI1C|MSIL1$',re.IGNORECASE)
     a = re.compile('any',re.IGNORECASE)
     if grd.match(val):
         return 'GRD'
     if slc.match(val):
         return 'SLC'
-    if ms.match(val):
+    if msl2.match(val):
+        return 'S2MSI2Ap'
+    if msl1.match(val):
         return 'S2MSI1C'
     if a.match(val):
-        return 'Any'
+        return 'ANY'
     raise ValueError("Invalid type '%s'" % val)
 
 realms = {
@@ -231,7 +234,7 @@ begin_date = '2014-01-01'
 default_direction = 'Ascending'
 default_platform = 'Sentinel-1'
 default_type = 'GRD'
-default_ccp = 10
+default_ccp = 5
 default_directory = '.'
 
 try:
@@ -442,16 +445,23 @@ if not refresh:
 
     params = []
     for criterium in criteria:
-        if criterium['direction'] in ['ASCENDING','DESCENDING']:
-            params.append({'q': '''ingestiondate:[%s TO NOW] AND platformname:%s AND producttype:%s AND orbitdirection:%s AND footprint:"Intersects(%s)"''' % \
-                (refdate, criterium['platform'], criterium['type'], \
-                 criterium['direction'],criterium['polygon']), \
-                 })
+        if not criterium['platform'] in ['ANY',]:
+            str_platform = " AND platformname:%s " % criterium['platform']
         else:
-            params.append({'q': '''ingestiondate:[%s TO NOW] AND platformname:%s AND producttype:%s AND footprint:"Intersects(%s)"''' % \
-                (refdate, criterium['platform'], criterium['type'], \
-                 criterium['polygon']), \
-                 })
+            str_platform = ""
+
+        if not criterium['direction'] in ['ANY',]:
+            str_direction = " AND orbitdirection:%s " % criterium['direction']
+        else:
+            str_direction = ""
+
+        if not criterium['type'] in ['ANY',]:
+            str_type = " AND producttype:%s " % criterium['type']
+        else:
+            str_type = ""
+
+        params.append({'q': '''ingestiondate:[%s TO NOW]%s%s%sAND footprint:"Intersects(%s)"''' % \
+                (refdate, str_platform, str_type, str_direction, criterium['polygon']), })
 
     # urls need encoding due to complexity of arguments
 

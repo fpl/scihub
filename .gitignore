@@ -52,3 +52,9 @@ docs/_build/
 
 # PyBuilder
 target/
+
+# Other files specific for the project
+
+*.kml
+*.manifest
+*.zip

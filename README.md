@@ -2,10 +2,10 @@ ESA Sentinel Science Hub rolling archive downloader
 ===================================================
 
 This is an easy script to download Sentinel data from the ESA rolling archive
-located at the Scientific Data Hub https://scihub.esa.int/
+located at the Copernicus Scientific Data Hub ttps://scihub.copernicus.eu/
 
 The archive can be queryed by a custom web service API documented at
-https://scihub.esa.int/userguide/BatchScripting
+https://scihub.copernicus.eu/userguide/5APIsAndBatchScripting
 and this script adopt it to do a better job in downloading periodically
 and storing images. The API is based on OpenData http://www.odata.org/
 and OpenSearch http://www.opensearch.org/
@@ -44,7 +44,7 @@ What follows is an example of configuration .cfg INI file used by this script:
 	direction = Any
 
 	; this is only useful with S-2 images
-	cloudcoverpercentage = 10
+	cloudcoverpercentage = 10 ; default 5
 
 	;
 	; Polygons, types, platforms and directions need to be coherent each other and list
@@ -66,7 +66,7 @@ What follows is an example of configuration .cfg INI file used by this script:
 	[Types]
 	
 	type1 = SLC
-	type2 = MS
+	type2 = MSIL1
 	type3 = Any
 	
 	[Directions]
