@@ -31,7 +31,13 @@
 #	 platform = Sentinel-1
 #	 type = SLC
 #	 direction = Any
+#
 #    directory = /my/own/path/for/products
+#
+#    ; you can also use any environment variable that will be expanded before
+#    ; use e.g.
+#    ; directory = $PWD
+#    ; An empty value means current working directory, as well
 #
 #	 ; this is only useful with S-2 images
 #
@@ -69,6 +75,7 @@
 #    [Directories]
 #
 #    directory1 = /alternative/path
+#    directory2 = $HOME/
 #    
 #    [Authentication]
 #    username = XXXXXXXX
@@ -105,10 +112,10 @@ usage: %s [-b date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-r|-t|-R]
           [--create|--download|--configuration=path|--data=path|--force|--help|
            --kml|--list|--manifest|--verbose|--products=path|--overwrite|
            --resume|--test|--refresh]
-    -b --begin= <date> begin date to consider for products
+    -b --begin=<date> begin date to consider for products
     -c --create create db only
     -d --download download data .zip file
-    -D --data= <path> name of SQLite database to use
+    -D --data=<path> name of SQLite database to use
     -C --configuration= <path> configuration file to use
     -f --force force
     -h --help this help
@@ -116,11 +123,12 @@ usage: %s [-b date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-r|-t|-R]
     -l --list output XML list of entries
     -m --manifest download manifest files
     -v --verbose run verbosely
-    -L --products= <path> output products names to file
+    -L --products=<path> output products names to file
     -o --overwrite overwrite data .zip file even if it exists
     -r --resume try using resume to continue download
     -t --test test ZIP file at check time
     -R --refresh download missing/invalid/corrupted stuff on the basis of current db status
+    -F --forever loop forever to download continuously images
 
 An ESA SCIHUB username and password profile is required and read from a
 scihub configuration file, such as:
@@ -188,6 +196,16 @@ def norm_type(val):
         return 'ANY'
     raise ValueError("Invalid type '%s'" % val)
 
+def norm_dir(val):
+    var = re.compile('^\$(\w+)$')
+    m = var.match(val)
+    if m:
+        try:
+            return os.environ[m.group(1)]
+        except:
+            return os.environ['PWD']
+    return val
+
 realms = {
     'apihub.esa.int' : {
         'searchbase' : 'https://scihub.copernicus.eu/apihub/search',
@@ -236,6 +254,8 @@ default_platform = 'Sentinel-1'
 default_type = 'GRD'
 default_ccp = 5
 default_directory = '.'
+default_waiting_time = 3600
+default_retrying_time = 300
 
 try:
     m = magic.open(magic.MAGIC_MIME_TYPE)
@@ -304,7 +324,7 @@ if create_db:
                 hash text, name text, idate text, bdate text, edate text, 
                 ptype text, direction text, orbitno integer, 
                 relorbitno integer, footprint text, platform text,
-                footprint_r1 text, centroid_r1 text);
+                footprint_r1 text, centroid_r1 text, outdir text);
             CREATE UNIQUE INDEX h ON products(hash);
             CREATE INDEX id ON products(idate);
             CREATE INDEX bd ON products(bdate);
@@ -316,6 +336,7 @@ if create_db:
             CREATE INDEX rorbno ON products(relorbitno);
             CREATE INDEX fpr1 ON products(footprint_r1);
             CREATE INDEX c1 ON products(centroid_r1);
+            CREATE INDEX od ON products(outdir);
             ''')
     db.commit()
     db.close()
@@ -355,7 +376,7 @@ try:
     general_type = norm_type(config.get('Global','type'))
     general_direction = norm_direction(config.get('Global','direction'))
     general_ccperc = config.get('Global','cloudcoverpercentage')
-    general_directory = config.get('Global','directory')
+    general_directory = norm_dir(config.get('Global','directory'))
 except configparser.Error, e:
     pass
 if general_platform:
@@ -392,7 +413,11 @@ try:
         platforms.append(platform)
     directory_items = config.items('Directories')
     for key, directory in directory_items:
-        directories.append(directory)
+        if directory:
+            directories.append(directory)
+        else:
+            directories.append('.')
+
 except:
     pass
 
@@ -410,13 +435,13 @@ for i in range(len(polygons)):
     except IndexError:
         directions.append(default_direction)
     try:
-        directories[i] = os.path.abspath(directories[i])
+        directories[i] = os.path.abspath(norm_dir(directories[i]))
     except IndexError:
         directories.append(os.path.abspath(default_directory))
 
     if verbose:
         print 'Polygon: %s, %s, %s, %s, %s' % \
-            (polygons[i], platforms[i], types[i], directions[i],directories[i])
+            (polygons[i], platforms[i], types[i], directions[i], directories[i])
 
 if not len(auth):
     print 'Missing ESA SCIHUB authentication information'
@@ -440,7 +465,7 @@ if not refresh:
     criteria = []
     for i in range(len(polygons)):
         criteria.append({'platform':platforms[i] , \
-                         'type':types[i], 'direction': directions[i], \
+                         'type':types[i], 'direction':directions[i], \
                          'polygon':polygons[i]})
 
     params = []
@@ -469,8 +494,9 @@ if not refresh:
     for param in params:
         urls.append(searchbase + '?' + urllib.urlencode(param))
 
-    for url in urls:
+    for index, url in enumerate(urls):
         page = 0
+        outdir = directories[index]
         while True: 
             stop = True
             page_url = url + '&' + urllib.urlencode({'rows': 100,'start' : page*100})
@@ -528,7 +554,7 @@ if not refresh:
                             orbitno = string.text
                         if string.attrib['name'] == 'relativeorbitnumber':
                             relorbitno = string.text
-                products.append([id,title,ingdate,footprint,beginposition,endposition,orbitdirection,producttype,orbitno,relorbitno,platform])
+                products.append([id,title,ingdate,footprint,beginposition,endposition,orbitdirection,producttype,orbitno,relorbitno,platform,outdir,])
                 # still products available, guess we can query again...
                 stop = False
                 if verbose:
@@ -541,7 +567,7 @@ else:
     cur = db.cursor()
     for entry in cur.execute('''SELECT * FROM products order by idate desc'''):
         products.append([entry[1],entry[2],entry[3],entry[10],entry[4], \
-            entry[5],entry[7],entry[6],entry[8],entry[9],entry[11]])
+            entry[5],entry[7],entry[6],entry[8],entry[9],entry[11],entry[12],])
         if verbose:
             print products[-1]
 
@@ -562,6 +588,7 @@ for product in products:
     orbitno = product[8]
     relorbitno = product[9]
     platform = product[10]
+    outdir = product[11]
     cur.execute('''SELECT COUNT(*) FROM products WHERE hash=?''',(uniqid,))
     row = cur.fetchone()
 
@@ -572,28 +599,32 @@ for product in products:
         if manifest_download:
             manifest = "%s/Products('%s')/Nodes('%s.SAFE')/Nodes('manifest.safe')/$value" % (servicebase,uniqid,name)
             filename = "%s.manifest" % name
-            if verbose:
-                print "downloading %s manifest file..." % name
-            with open(filename, 'wb') as f:
-                c = pycurl.Curl()
-                c.setopt(c.URL,manifest)
-                c.setopt(c.FOLLOWLOCATION, True)
-                c.setopt(c.SSL_VERIFYPEER, False)
-                c.setopt(c.USERPWD,auth)
-                c.setopt(c.WRITEFUNCTION,f.write)
-                c.perform()
-                c.close()
+            if overwrite or not os.path.exists(os.path.join(outdir, filename)):
+                if verbose:
+                    print "downloading %s manifest file..." % name
+                with open(os.path.join(outdir, filename), 'wb') as f:
+                    c = pycurl.Curl()
+                    c.setopt(c.URL,manifest)
+                    c.setopt(c.FOLLOWLOCATION, True)
+                    c.setopt(c.SSL_VERIFYPEER, False)
+                    c.setopt(c.USERPWD,auth)
+                    c.setopt(c.WRITEFUNCTION,f.write)
+                    c.perform()
+                    c.close()
+            else:
+                if verbose:
+                    print "skipping existing %s manifest file" % name
 
         if data_download:
             data = "%s/Products('%s')/$value" % (servicebase, uniqid)
             filename = "%s.zip" % name
-            if overwrite or not os.path.exists(filename) or not zipfile.is_zipfile(filename) or (test and not testzip(filename)):
+            if overwrite or not os.path.exists(os.path.join(outdir, filename)) or not zipfile.is_zipfile(filename) or (test and not testzip(filename)):
                 if verbose: 
                     print "downloading %s data file..." % name
 
                 loop = True
                 while loop:
-                    if not overwrite and resume and os.path.exists(filename) and m.file(filename) == 'application/zip' :
+                    if not overwrite and resume and os.path.exists(os.path.join(outdir, filename)) and m.file(filename) == 'application/zip' :
                         counter = os.path.getsize(filename)
                         mode = 'ab'
                         if verbose:
@@ -601,7 +632,7 @@ for product in products:
                     else:
                         counter = 0
                         mode = 'wb'
-                    with open(filename, mode) as f:
+                    with open(os.path.join(outdir, filename), mode) as f:
                         c = pycurl.Curl()
                         c.setopt(c.URL,data)
                         c.setopt(c.FOLLOWLOCATION, True)
@@ -618,14 +649,14 @@ for product in products:
                         except:
                             loop = True
                             if verbose:
-                                print "download failed, restarting in 5 minutes..."
-                                time.sleep(300)
+                                print "download failed, restarting in %d seconds..." % default_retrying_time
+                                time.sleep(default_retrying_time)
                         c.close()
                         if m.file(filename) != 'application/zip':
                             loop = True
                             if verbose:
-                                print "downloaded file invalid, restarting in 5 minutes..."
-                                time.sleep(300)
+                                print "downloaded file invalid, restarting in %d seconds..." % default_retrying_time
+                                time.sleep(default_retrying_time)
             else:
                 if verbose:
                     print "skipping existing file %s" % filename
@@ -661,20 +692,24 @@ Platform = $[PlatformName]
             buff = '''<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
 <Document>%s<Placemark><name>%s</name><StyleUrl>#ballon-style</StyleUrl>%s%s</Placemark></Document></kml>''' % (style,name,extdata,poly.ExportToKML())
-            kmlfile = open(name+'.kml','w')
-            kmlfile.write(buff)
-            kmlfile.close()
-            if verbose:
-                print "KML file %s.kml created" % name
+            if overwrite or not os.path.exists(os.path.join(outdir, name+'.kml')):
+                kmlfile = open(os.path.join(outdir, name)+'.kml','w')
+                kmlfile.write(buff)
+                kmlfile.close()
+                if verbose:
+                    print "KML file %s.kml created" % name
+            else:
+                if verbose:
+                    print "KML file %s.kml skipped" % name
 
         if not refresh:
             simple = shapely.wkt.loads(footprint)
             footprint_r1 = shapely.wkt.dumps(simple,rounding_precision=1)
             centroid_r1 = shapely.wkt.dumps(simple.centroid,rounding_precision=1)
             cur.execute('''INSERT OR REPLACE INTO products 
-                    (id,hash,name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,footprint,platform,footprint_r1,centroid_r1) 
-                    VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?)''', 
-                    (uniqid,name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,footprint,platform,footprint_r1,centroid_r1))
+                    (id,hash,name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,footprint,platform,footprint_r1,centroid_r1,outdir) 
+                    VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''', 
+                    (uniqid,name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,footprint,platform,footprint_r1,centroid_r1,outdir))
             db.commit()
     else:
         if verbose:
