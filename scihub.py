@@ -299,12 +299,12 @@ for opt, arg in opts:
         overwrite = True
     if opt in ['-r','--resume']:
         resume = True
-    if opt in ['-r','--resumetime']:
+    if opt in ['-M','--resumetime']:
         resume = True
         retrying_time = int(arg)
     if opt in ['-t','--test']:
         test = True
-    if opt in ['-M','--refresh']:
+    if opt in ['-R','--refresh']:
         refresh = True
     if opt in ['-F','--forever']:
         loop = True
@@ -577,10 +577,12 @@ while do:
                     break
     else:
 
+        if verbose:
+            print "Refreshing from database contents..."
         cur = db.cursor()
         for entry in cur.execute('''SELECT * FROM products order by idate desc'''):
             products.append([entry[1],entry[2],entry[3],entry[10],entry[4], \
-                entry[5],entry[7],entry[6],entry[8],entry[9],entry[11],entry[12],])
+                entry[5],entry[7],entry[6],entry[8],entry[9],entry[11],entry[14],])
             if verbose:
                 print products[-1]
 
