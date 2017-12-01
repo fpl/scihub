@@ -24,6 +24,7 @@ but it is quite complete, thanks to a series of features:
  * all management and download operations can be run separately
  * Data downloads can be checked and restarted on failure
  * It supports DHuS mirrors, thanks to @realm convention in authentication
+ * It support continuous download or can be used via cron
  * it is free software and can be extended easily for better purposes
  * it is currently used in production and it works!
 
@@ -42,6 +43,7 @@ What follows is an example of configuration .cfg INI file used by this script:
 	platform = Sentinel-1
 	type = SLC
 	direction = Any
+	directory = /home/user/my/dir
 
 	; this is only useful with S-2 images
 	cloudcoverpercentage = 10 ; default 5
@@ -74,6 +76,13 @@ What follows is an example of configuration .cfg INI file used by this script:
 	direction1 = Descending
 	direction2 = Ascending
 	direction3 = ANY
+
+	[Directories]
+
+	directory1 = /home/user/dir1
+	directory2 = $PWD
+	directory3 = $SOME_ENVIRONMENT_VARIABLE
+
 	
 	[Authentication]
 	username = XXXXXXXX@apihub.esa.int
