@@ -199,14 +199,7 @@ def norm_type(val):
     raise ValueError("Invalid type '%s'" % val)
 
 def norm_dir(val):
-    var = re.compile('^\$(\w+)$')
-    m = var.match(val)
-    if m:
-        try:
-            return os.environ[m.group(1)]
-        except:
-            return os.environ['PWD']
-    return val
+    return os.path.abspath(os.path.expandvars(val))
 
 realms = {
     'apihub.esa.int' : {
@@ -450,9 +443,9 @@ for i in range(len(polygons)):
     except IndexError:
         directions.append(default_direction)
     try:
-        directories[i] = os.path.abspath(norm_dir(directories[i]))
+        directories[i] = norm_dir(directories[i])
     except IndexError:
-        directories.append(os.path.abspath(default_directory))
+        directories.append(default_directory)
 
     if verbose:
         print 'Polygon: %s, %s, %s, %s, %s' % \
