@@ -104,14 +104,14 @@ import magic
 import dateutil.parser
 
 def usage():
-    print '''usage: %s [-b date|-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-m|-v|-o|-r|-t|-R|-F|-M int |-T int]''' % sys.argv[0]
+    print '''usage: %s [-b date|-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-m|-v|-o|-r|-n|-t|-R|-F|-M int |-T int]''' % sys.argv[0]
 
 def help():
     print '''
 usage: %s [-b date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-r|-t|-R]
           [--create|--download|--configuration=path|--data=path|--force|--help|
            --kml|--list|--manifest|--verbose|--products=path|--overwrite|--forever|
-           --resume|--test|--refresh]
+           --forevertime=seconds|--resume|--retrytime=seconds|--test|--refresh]
     -b --begin=<date> begin date to consider for products
     -c --create create db only
     -d --download download data .zip file
@@ -126,7 +126,8 @@ usage: %s [-b date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-r|-t|-R]
     -L --products=<path> output products names to file
     -o --overwrite overwrite data .zip/kml/manifest file even if it exists
     -r --resume try using resume to continue download
-    -M --resumetime=<int> time in secs of waiting
+    -M --retrytime=<int> time in secs of waiting
+    -n --noretry do not retry after a download failure
     -t --test test ZIP file at check time
     -R --refresh download missing/invalid/corrupted stuff on the basis of current db status
     -F --forever loop forever to download continuously images
@@ -242,7 +243,8 @@ configuration_file = '/usr/local/etc/scihub.cfg'
 resume = False
 test = False
 refresh = False
-loop = False
+forever = False
+retry = True
 begin_date = '2014-01-01'
 
 default_direction = 'Ascending'
@@ -261,11 +263,11 @@ except AttributeError,e:
     m.file = m.from_file
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:],'b:cvfdhmklD:L:C:orM:tRFT:',
+    opts, args = getopt.getopt(sys.argv[1:],'b:cvfdhmklD:L:C:orM:tRFT:n',
             ['begin=','create','verbose','force','download','help','manifest','kml',
                 'list','data=','products=','configuration=','overwrite',
                 'resume','test','refresh', 'forever', 'forevertime=',
-                'resumetime='])
+                'noretry', 'retrytime='])
 except getopt.GetoptError:
     usage()
     sys.exit(3)
@@ -299,7 +301,9 @@ for opt, arg in opts:
         overwrite = True
     if opt in ['-r','--resume']:
         resume = True
-    if opt in ['-M','--resumetime']:
+    if opt in ['-n','--noretry']:
+        retry = False
+    if opt in ['-M','--retrytime']:
         resume = True
         retrying_time = int(arg)
     if opt in ['-t','--test']:
@@ -307,9 +311,9 @@ for opt, arg in opts:
     if opt in ['-R','--refresh']:
         refresh = True
     if opt in ['-F','--forever']:
-        loop = True
+        forever = True
     if opt in ['-T','--forevertime']:
-        loop = True
+        forever = True
         waiting_time = int(arg)
     if opt in ['-h','--help']:
         help()
@@ -662,14 +666,16 @@ while do:
                                 c.perform()
                                 loop = False
                             except:
-                                loop = True
-                                if verbose:
+                                if retry: 
+                                    loop = True
+                                if retry and verbose:
                                     print "download failed, restarting in %d seconds..." % retrying_time
                                     time.sleep(retrying_time)
                             c.close()
                             if m.file(filename) != 'application/zip':
-                                loop = True
-                                if verbose:
+                                if retry:
+                                    loop = True
+                                if retry and verbose:
                                     print "downloaded file invalid, restarting in %d seconds..." % retrying_time
                                     time.sleep(retrying_time)
                 else:
@@ -733,7 +739,7 @@ Platform = $[PlatformName]
     if list_products:
         pf.close()
 
-    if not loop:
+    if not forever:
         do = False
     else:
         if verbose:
