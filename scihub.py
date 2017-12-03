@@ -668,15 +668,15 @@ while do:
                             except:
                                 if retry: 
                                     loop = True
-                                if retry and verbose:
-                                    print "download failed, restarting in %d seconds..." % retrying_time
+                                    if verbose:
+                                        print "download failed, restarting in %d seconds..." % retrying_time
                                     time.sleep(retrying_time)
                             c.close()
                             if m.file(filename) != 'application/zip':
                                 if retry:
                                     loop = True
-                                if retry and verbose:
-                                    print "downloaded file invalid, restarting in %d seconds..." % retrying_time
+                                    if verbose:
+                                        print "downloaded file invalid, restarting in %d seconds..." % retrying_time
                                     time.sleep(retrying_time)
                 else:
                     if verbose:
