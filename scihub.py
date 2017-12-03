@@ -202,6 +202,10 @@ def norm_type(val):
 def norm_dir(val):
     return os.path.abspath(os.path.expandvars(val))
 
+def say(*args):
+    if verbose:
+        print ' '.join(map(str, args))
+
 realms = {
     'apihub.esa.int' : {
         'searchbase' : 'https://scihub.copernicus.eu/apihub/search',
@@ -251,7 +255,7 @@ default_direction = 'Ascending'
 default_platform = 'Sentinel-1'
 default_type = 'GRD'
 default_ccp = 5
-default_directory = '.'
+default_directory = os.path.abspath('.')
 waiting_time = 14400
 retrying_time = 300
 
@@ -351,8 +355,7 @@ if create_db:
             ''')
     db.commit()
     db.close()
-    if verbose:
-        print "Database created"
+    say("Database created")
     sys.exit(0)
 
 auth = ''
@@ -427,7 +430,7 @@ try:
         if directory:
             directories.append(directory)
         else:
-            directories.append('.')
+            directories.append(os.path.abspath('.'))
 except:
     pass
 
@@ -451,9 +454,8 @@ for i in range(len(polygons)):
     except IndexError:
         directories.append(default_directory)
 
-    if verbose:
-        print 'Polygon: %s, %s, %s, %s, %s' % \
-            (polygons[i], platforms[i], types[i], directions[i], directories[i])
+        say('Polygon: %s, %s, %s, %s, %s' % \
+            (polygons[i], platforms[i], types[i], directions[i], directories[i]))
 
 if not len(auth):
     print 'Missing ESA SCIHUB authentication information'
@@ -474,8 +476,7 @@ while do:
             last = []
             last.append(begin_date)
 
-        if verbose:
-            print 'Latest ingestion date considered: %s' % last[0]
+        say('Latest ingestion date considered: %s' % last[0])
 
         refdate = last[0] + 'T00:00:00.000Z'
 
@@ -524,8 +525,7 @@ while do:
                 c.setopt(c.FOLLOWLOCATION, True)
                 c.setopt(c.SSL_VERIFYPEER, False)
                 c.setopt(c.WRITEFUNCTION,buffer.write)
-                if verbose:
-                    print "get %s..." % page_url
+                say("get %s..." % page_url)
                 c.perform()
                 c.close()
 
@@ -574,21 +574,18 @@ while do:
                     products.append([id,title,ingdate,footprint,beginposition,endposition,orbitdirection,producttype,orbitno,relorbitno,platform,outdir,])
                     # still products available, guess we can query again...
                     stop = False
-                    if verbose:
-                        print products[-1]
+                    say(products[-1])
                 page = page + 1
                 if stop:
                     break
     else:
 
-        if verbose:
-            print "Refreshing from database contents..."
+        say("Refreshing from database contents...")
         cur = db.cursor()
         for entry in cur.execute('''SELECT * FROM products order by idate desc'''):
             products.append([entry[1],entry[2],entry[3],entry[10],entry[4], \
                 entry[5],entry[7],entry[6],entry[8],entry[9],entry[11],entry[14],])
-            if verbose:
-                print products[-1]
+            say(products[-1])
 
     cur = db.cursor()
 
@@ -619,8 +616,7 @@ while do:
                 manifest = "%s/Products('%s')/Nodes('%s.SAFE')/Nodes('manifest.safe')/$value" % (servicebase,uniqid,name)
                 filename = "%s.manifest" % name
                 if overwrite or not os.path.exists(os.path.join(outdir, filename)):
-                    if verbose:
-                        print "downloading %s manifest file..." % name
+                    say("downloading %s manifest file..." % name)
                     with open(os.path.join(outdir, filename), 'wb') as f:
                         c = pycurl.Curl()
                         c.setopt(c.URL,manifest)
@@ -631,23 +627,20 @@ while do:
                         c.perform()
                         c.close()
                 else:
-                    if verbose:
-                        print "skipping existing %s manifest file" % name
+                    say("skipping existing %s manifest file" % name)
 
             if data_download:
                 data = "%s/Products('%s')/$value" % (servicebase, uniqid)
                 filename = "%s.zip" % name
                 if overwrite or not os.path.exists(os.path.join(outdir, filename)) or not zipfile.is_zipfile(filename) or (test and not testzip(filename)):
-                    if verbose: 
-                        print "downloading %s data file..." % name
+                    say("downloading %s data file..." % name)
 
                     loop = True
                     while loop:
                         if not overwrite and resume and os.path.exists(os.path.join(outdir, filename)) and m.file(filename) == 'application/zip' :
                             counter = os.path.getsize(filename)
                             mode = 'ab'
-                            if verbose:
-                                print "resuming download starting from byte %d" % counter
+                            say("resuming download starting from byte %d" % counter)
                         else:
                             counter = 0
                             mode = 'wb'
@@ -668,19 +661,16 @@ while do:
                             except:
                                 if retry: 
                                     loop = True
-                                    if verbose:
-                                        print "download failed, restarting in %d seconds..." % retrying_time
+                                    say("download failed, restarting in %d seconds..." % retrying_time)
                                     time.sleep(retrying_time)
                             c.close()
                             if m.file(filename) != 'application/zip':
                                 if retry:
                                     loop = True
-                                    if verbose:
-                                        print "downloaded file invalid, restarting in %d seconds..." % retrying_time
+                                    say("downloaded file invalid, restarting in %d seconds..." % retrying_time)
                                     time.sleep(retrying_time)
                 else:
-                    if verbose:
-                        print "skipping existing file %s" % filename
+                    say("skipping existing file %s" % filename)
 
 
             if kml:
@@ -717,11 +707,9 @@ Platform = $[PlatformName]
                     kmlfile = open(os.path.join(outdir, name)+'.kml','w')
                     kmlfile.write(buff)
                     kmlfile.close()
-                    if verbose:
-                        print "KML file %s.kml created" % name
+                    say("KML file %s.kml created" % name)
                 else:
-                    if verbose:
-                        print "KML file %s.kml skipped" % name
+                    say("KML file %s.kml skipped" % name)
 
             if not refresh:
                 simple = shapely.wkt.loads(footprint)
@@ -733,8 +721,7 @@ Platform = $[PlatformName]
                         (uniqid,name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,footprint,platform,footprint_r1,centroid_r1,outdir))
                 db.commit()
         else:
-            if verbose:
-                print "skipping %s" % name
+            say("skipping %s" % name)
 
     if list_products:
         pf.close()
@@ -742,8 +729,7 @@ Platform = $[PlatformName]
     if not forever:
         do = False
     else:
-        if verbose:
-            print "Wating %d seconds" % waiting_time
+        say("Wating %d seconds" % waiting_time)
         db.close()
         time.sleep(waiting_time)
         db = sqlite.connect(db_file)
