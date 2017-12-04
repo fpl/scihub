@@ -1,5 +1,5 @@
-ESA Sentinel Science Hub rolling archive downloader
-===================================================
+Copernicus Sentinel Science Hub rolling archive downloader
+==========================================================
 
 This is an easy script to download Sentinel data from the ESA rolling archive
 located at the Copernicus Scientific Data Hub ttps://scihub.copernicus.eu/
@@ -15,16 +15,16 @@ archive on the basis of a specific query. It is a proof of concept,
 but it is quite complete, thanks to a series of features:
 
  * a local SQLite database is used to know if images already have
-   been downloaded or not
+   been downloaded or not, and to store a set of metadata
  * it parses accurately XML results to find useful information
  * it creates useful KML add-on files filled with information taken from imagery metadata
  * it downloads the official manifest file along with (optionally) image kit
  * a simple INI file format can be used to improve and customize
    the script
- * all management and download operations can be run separately
- * Data downloads can be checked and restarted on failure
- * It supports DHuS mirrors, thanks to @realm convention in authentication
- * It support continuous download or can be used via cron
+ * All management and download operations can be run separately
+ * data downloads can be checked and restarted on failure
+ * it supports DHuS mirrors, thanks to @realm convention in authentication
+ * it support continuous download or can be used via cron
  * it is free software and can be extended easily for better purposes
  * it is currently used in production and it works!
 
@@ -81,7 +81,7 @@ What follows is an example of configuration .cfg INI file used by this script:
 
 	directory1 = /home/user/dir1
 	directory2 = $PWD
-	directory3 = $SOME_ENVIRONMENT_VARIABLE
+	directory3 = $SOME_ENVIRONMENT_VARIABLE/sentinel/data
 
 	
 	[Authentication]
