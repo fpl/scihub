@@ -633,9 +633,8 @@ while do:
                 data = "%s/Products('%s')/$value" % (servicebase, uniqid)
                 filename = "%s.zip" % name
                 fullname = os.path.join(outdir,filename)
-                if overwrite or not os.path.exists(fullname) or not \
-                            zipfile.is_zipfile(os.path.exists(fullname)) or \
-                            (test and not testzip(os.path.exists(fullname))):
+                if overwrite or not os.path.exists(fullname) or not zipfile.is_zipfile(fullname) or \
+                            (test and not testzip(fullname)):
                     say("downloading %s data file..." % name)
 
                     loop = True
