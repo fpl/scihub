@@ -632,19 +632,21 @@ while do:
             if data_download:
                 data = "%s/Products('%s')/$value" % (servicebase, uniqid)
                 filename = "%s.zip" % name
-                if overwrite or not os.path.exists(os.path.join(outdir, filename)) or not zipfile.is_zipfile(filename) or (test and not testzip(filename)):
+                fullname = os.path.join(outdir,filename)
+                if overwrite or not os.path.exists(fullname) or not zipfile.is_zipfile(fullname) or \
+                            (test and not testzip(fullname)):
                     say("downloading %s data file..." % name)
 
                     loop = True
                     while loop:
-                        if not overwrite and resume and os.path.exists(os.path.join(outdir, filename)) and m.file(filename) == 'application/zip' :
-                            counter = os.path.getsize(filename)
+                        if not overwrite and resume and os.path.exists(fullname) and m.file(fullname) == 'application/zip' :
+                            counter = os.path.getsize(fullname)
                             mode = 'ab'
                             say("resuming download starting from byte %d" % counter)
                         else:
                             counter = 0
                             mode = 'wb'
-                        with open(os.path.join(outdir, filename), mode) as f:
+                        with open(fullname, mode) as f:
                             c = pycurl.Curl()
                             c.setopt(c.URL,data)
                             c.setopt(c.FOLLOWLOCATION, True)
@@ -664,7 +666,7 @@ while do:
                                     say("download failed, restarting in %d seconds..." % retrying_time)
                                     time.sleep(retrying_time)
                             c.close()
-                            if m.file(filename) != 'application/zip':
+                            if m.file(fullname) != 'application/zip':
                                 if retry:
                                     loop = True
                                     say("downloaded file invalid, restarting in %d seconds..." % retrying_time)
