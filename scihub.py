@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 #   Copyright (C) 2015-2017 Francesco P. Lovergine <francesco.lovergine@cnr.it>
 #
@@ -87,14 +87,14 @@
 #    
 
 import pycurl
-import urllib
+import urllib.request, urllib.parse, urllib.error
 import sys
 import getopt
 import os.path
-import ConfigParser as configparser
+import configparser as configparser
 import sqlite3 as sqlite
 import xml.etree.ElementTree as et
-from StringIO import StringIO
+from io import BytesIO
 from osgeo import ogr
 import shapely.wkt
 import zipfile
@@ -104,10 +104,10 @@ import magic
 import dateutil.parser
 
 def usage():
-    print '''usage: %s [-b date|-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-m|-v|-o|-r|-n|-t|-R|-F|-M int |-T int]''' % sys.argv[0]
+    print('''usage: %s [-b date|-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-m|-v|-o|-r|-n|-t|-R|-F|-M int |-T int]''' % sys.argv[0])
 
 def help():
-    print '''
+    print('''
 usage: %s [-b date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-r|-t|-R]
           [--create|--download|--configuration=path|--data=path|--force|--help|
            --kml|--list|--manifest|--verbose|--products=path|--overwrite|--forever|
@@ -143,7 +143,7 @@ scihub configuration file, such as:
 Note that different realms can be used if the user is able to access not only
 the main SciHub server but any other regional mirror or Collaborative Ground
 Segment. If not specified, the main ESA one will be used.
-''' % sys.argv[0]
+''' % sys.argv[0])
 
 def testzip(filename):
     try:
@@ -204,7 +204,7 @@ def norm_dir(val):
 
 def say(*args):
     if verbose:
-        print ' '.join(map(str, args))
+        print(' '.join(map(str, args)))
 
 realms = {
     'apihub.esa.int' : {
@@ -262,7 +262,7 @@ retrying_time = 300
 try:
     m = magic.open(magic.MAGIC_MIME_TYPE)
     m.load()
-except AttributeError,e:
+except AttributeError as e:
     m = magic.Magic(mime=True)
     m.file = m.from_file
 
@@ -325,8 +325,8 @@ for opt, arg in opts:
 
 try:
     db = sqlite.connect(db_file)
-except sqlite.Error, e:
-    print 'Error %s:' % e.args[0]
+except sqlite.Error as e:
+    print('Error %s:' % e.args[0])
     sys.exit(1)
 
 if refresh:
@@ -372,12 +372,12 @@ try:
             searchbase = realms[realm]['searchbase']
             servicebase = realms[realm]['servicebase']
         except KeyError:
-            print 'Realm not found: %s' % realm
+            print('Realm not found: %s' % realm)
             sys.exit(6)
     password = config.get('Authentication','password')
     auth = user + ':' + password
-except configparser.Error, e:
-    print 'Error parsing configuration file: %s' % e
+except configparser.Error as e:
+    print('Error parsing configuration file: %s' % e)
     sys.exit(4)
 
 general_platform = None
@@ -391,7 +391,7 @@ try:
     general_direction = norm_direction(config.get('Global','direction'))
     general_ccperc = config.get('Global','cloudcoverpercentage')
     general_directory = norm_dir(config.get('Global','directory'))
-except configparser.Error, e:
+except configparser.Error as e:
     pass
 if general_platform:
     default_platform = general_platform
@@ -458,7 +458,7 @@ for i in range(len(polygons)):
             (polygons[i], platforms[i], types[i], directions[i], directories[i]))
 
 if not len(auth):
-    print 'Missing ESA SCIHUB authentication information'
+    print('Missing ESA SCIHUB authentication information')
     sys.exit(7)
 
 
@@ -510,15 +510,15 @@ while do:
 
         urls = []
         for param in params:
-            urls.append(searchbase + '?' + urllib.urlencode(param))
+            urls.append(searchbase + '?' + urllib.parse.urlencode(param))
 
         for index, url in enumerate(urls):
             page = 0
             outdir = directories[index]
             while True: 
                 stop = True
-                page_url = url + '&' + urllib.urlencode({'rows': 100,'start' : page*100})
-                buffer = StringIO()
+                page_url = url + '&' + urllib.parse.urlencode({'rows': 100,'start' : page*100})
+                buffer = BytesIO()
                 c = pycurl.Curl()
                 c.setopt(c.URL,str(page_url))
                 c.setopt(c.USERPWD,auth)
@@ -531,7 +531,7 @@ while do:
 
                 body = buffer.getvalue()
                 if output_list:
-                    print body + '\n'
+                    print(body + '\n')
                 try:
                     root = et.fromstring(body)
                 except et.ParseError:
@@ -548,7 +548,7 @@ while do:
                     endposition = ''
                     ingdate = ''
                     for string in entry.iter('{http://www.w3.org/2005/Atom}str'):
-                        if string.attrib.has_key('name'):
+                        if 'name' in string.attrib:
                             if string.attrib['name'] == 'footprint':
                                 footprint = string.text
                             if string.attrib['name'] == 'orbitdirection':
@@ -558,7 +558,7 @@ while do:
                             if string.attrib['name'] == 'platformname':
                                 platform = string.text
                     for string in entry.iter('{http://www.w3.org/2005/Atom}date'):
-                        if string.attrib.has_key('name'):
+                        if 'name' in string.attrib:
                             if string.attrib['name'] == 'ingestiondate':
                                 ingdate = string.text
                             if string.attrib['name'] == 'beginposition':
@@ -566,7 +566,7 @@ while do:
                             if string.attrib['name'] == 'endposition':
                                 endposition = string.text
                     for string in entry.iter('{http://www.w3.org/2005/Atom}int'):
-                        if string.attrib.has_key('name'):
+                        if 'name' in string.attrib:
                             if string.attrib['name'] == 'orbitnumber':
                                 orbitno = string.text
                             if string.attrib['name'] == 'relativeorbitnumber':
