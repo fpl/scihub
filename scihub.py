@@ -91,7 +91,7 @@ import urllib.request, urllib.parse, urllib.error
 import sys
 import getopt
 import os.path
-import configparser as configparser
+import configparser 
 import sqlite3 as sqlite
 import xml.etree.ElementTree as et
 from io import BytesIO
