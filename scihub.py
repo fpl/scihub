@@ -227,6 +227,18 @@ realms = {
         'searchbase' : 'https://sentinels.space.noa.gr/dhus/search',
         'servicebase' : 'https://sentinels.space.noa.gr/dhus/odata/v1'
     },
+    'colhub1' : {
+        'searchbase' : 'https://colhub.copernicus.eu/dhus/search',
+        'servicebase' : 'https://colhub.copernicus.eu/dhus/odata/v1'
+    },
+    'colhub2' : {
+        'searchbase' : 'https://colhub2.copernicus.eu/dhus/search',
+        'servicebase' : 'https://colhub2.copernicus.eu/dhus/odata/v1'
+    },
+    'inthub' : {
+        'searchbase' : 'https://inthub.copernicus.eu/dhus/search',
+        'servicebase' : 'https://inthub.copernicus.eu/dhus/odata/v1'
+    },
 }
 searchbase = realms['apihub.esa.int']['searchbase']
 servicebase = realms['apihub.esa.int']['servicebase']
