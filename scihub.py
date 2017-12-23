@@ -1,6 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
-#   Copyright (C) 2015-2016 Francesco P. Lovergine <f.lovergine@ba.issia.cnr.it>
+#   Copyright (C) 2015-2017 Francesco P. Lovergine <francesco.lovergine@cnr.it>
 #
 #   This program is free software: you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
@@ -31,7 +31,13 @@
 #	 platform = Sentinel-1
 #	 type = SLC
 #	 direction = Any
+#
 #    directory = /my/own/path/for/products
+#
+#    ; you can also use any environment variable that will be expanded before
+#    ; use e.g.
+#    ; directory = $PWD
+#    ; An empty value means current working directory, as well
 #
 #	 ; this is only useful with S-2 images
 #
@@ -69,6 +75,7 @@
 #    [Directories]
 #
 #    directory1 = /alternative/path
+#    directory2 = $HOME/
 #    
 #    [Authentication]
 #    username = XXXXXXXX
@@ -80,14 +87,14 @@
 #    
 
 import pycurl
-import urllib
+import urllib.request, urllib.parse, urllib.error
 import sys
 import getopt
 import os.path
-import ConfigParser as configparser
+import configparser 
 import sqlite3 as sqlite
 import xml.etree.ElementTree as et
-from StringIO import StringIO
+from io import BytesIO
 from osgeo import ogr
 import shapely.wkt
 import zipfile
@@ -97,18 +104,18 @@ import magic
 import dateutil.parser
 
 def usage():
-    print '''usage: %s [-b date|-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-m|-v|-o|-r|-t|-R]''' % sys.argv[0]
+    print('''usage: %s [-b date|-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-m|-v|-o|-r|-n|-t|-R|-F|-M int |-T int]''' % sys.argv[0])
 
 def help():
-    print '''
+    print('''
 usage: %s [-b date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-r|-t|-R]
           [--create|--download|--configuration=path|--data=path|--force|--help|
-           --kml|--list|--manifest|--verbose|--products=path|--overwrite|
-           --resume|--test|--refresh]
-    -b --begin= <date> begin date to consider for products
+           --kml|--list|--manifest|--verbose|--products=path|--overwrite|--forever|
+           --forevertime=seconds|--resume|--retrytime=seconds|--test|--refresh]
+    -b --begin=<date> begin date to consider for products
     -c --create create db only
     -d --download download data .zip file
-    -D --data= <path> name of SQLite database to use
+    -D --data=<path> name of SQLite database to use
     -C --configuration= <path> configuration file to use
     -f --force force
     -h --help this help
@@ -116,11 +123,15 @@ usage: %s [-b date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-r|-t|-R]
     -l --list output XML list of entries
     -m --manifest download manifest files
     -v --verbose run verbosely
-    -L --products= <path> output products names to file
-    -o --overwrite overwrite data .zip file even if it exists
+    -L --products=<path> output products names to file
+    -o --overwrite overwrite data .zip/kml/manifest file even if it exists
     -r --resume try using resume to continue download
+    -M --retrytime=<int> time in secs of waiting
+    -n --noretry do not retry after a download failure
     -t --test test ZIP file at check time
     -R --refresh download missing/invalid/corrupted stuff on the basis of current db status
+    -F --forever loop forever to download continuously images
+    -T --forevertime=<time> loop time of waiting
 
 An ESA SCIHUB username and password profile is required and read from a
 scihub configuration file, such as:
@@ -132,7 +143,7 @@ scihub configuration file, such as:
 Note that different realms can be used if the user is able to access not only
 the main SciHub server but any other regional mirror or Collaborative Ground
 Segment. If not specified, the main ESA one will be used.
-''' % sys.argv[0]
+''' % sys.argv[0])
 
 def testzip(filename):
     try:
@@ -155,7 +166,7 @@ def norm_platform(val):
     if s2.match(val):
         return 'Sentinel-2'
     if a.match(val):
-        return 'Any'
+        return 'ANY'
     raise ValueError("Invalid platform '%s'" % val)
 
 def norm_direction(val):
@@ -167,23 +178,33 @@ def norm_direction(val):
     if desc.match(val):
         return 'Descending'
     if a.match(val):
-        return 'Any'
+        return 'ANY'
     raise ValueError("Invalid direction '%s'" % val)
 
 def norm_type(val):
-    grd = re.compile('GRD(H)?',re.IGNORECASE)
-    slc = re.compile('SLC',re.IGNORECASE)
-    ms = re.compile('S2MSI1C|MS',re.IGNORECASE)
+    grd = re.compile('^GRD(H)?$',re.IGNORECASE)
+    slc = re.compile('^SLC$',re.IGNORECASE)
+    msl2 = re.compile('^S2MSI2A|MSIL2$',re.IGNORECASE)
+    msl1 = re.compile('^S2MSI1C|MSIL1$',re.IGNORECASE)
     a = re.compile('any',re.IGNORECASE)
     if grd.match(val):
         return 'GRD'
     if slc.match(val):
         return 'SLC'
-    if ms.match(val):
+    if msl2.match(val):
+        return 'S2MSI2Ap'
+    if msl1.match(val):
         return 'S2MSI1C'
     if a.match(val):
-        return 'Any'
+        return 'ANY'
     raise ValueError("Invalid type '%s'" % val)
+
+def norm_dir(val):
+    return os.path.abspath(os.path.expandvars(val))
+
+def say(*args):
+    if verbose:
+        print(' '.join(map(str, args)))
 
 realms = {
     'apihub.esa.int' : {
@@ -198,9 +219,25 @@ realms = {
         'searchbase' : 'http://collaborative.mt.asi.it/search',
         'servicebase' : 'http://collaborative.mt.asi.it/odata/v1'
     },
+    'fmi.fi' : {
+        'searchbase' : 'https://finhub.nsdc.fmi.fi/search',
+        'servicebase' : 'https://finhub.nsdc.fmi.fi/odata/v1'
+    },
     'noa.gr' : {
         'searchbase' : 'https://sentinels.space.noa.gr/dhus/search',
         'servicebase' : 'https://sentinels.space.noa.gr/dhus/odata/v1'
+    },
+    'colhub1' : {
+        'searchbase' : 'https://colhub.copernicus.eu/dhus/search',
+        'servicebase' : 'https://colhub.copernicus.eu/dhus/odata/v1'
+    },
+    'colhub2' : {
+        'searchbase' : 'https://colhub2.copernicus.eu/dhus/search',
+        'servicebase' : 'https://colhub2.copernicus.eu/dhus/odata/v1'
+    },
+    'inthub' : {
+        'searchbase' : 'https://inthub.copernicus.eu/dhus/search',
+        'servicebase' : 'https://inthub.copernicus.eu/dhus/odata/v1'
     },
 }
 searchbase = realms['apihub.esa.int']['searchbase']
@@ -222,26 +259,31 @@ configuration_file = '/usr/local/etc/scihub.cfg'
 resume = False
 test = False
 refresh = False
+forever = False
+retry = True
 begin_date = '2014-01-01'
 
 default_direction = 'Ascending'
 default_platform = 'Sentinel-1'
 default_type = 'GRD'
-default_ccp = 10
-default_directory = '.'
+default_ccp = 5
+default_directory = os.path.abspath('.')
+waiting_time = 14400
+retrying_time = 300
 
 try:
     m = magic.open(magic.MAGIC_MIME_TYPE)
     m.load()
-except AttributeError,e:
+except AttributeError as e:
     m = magic.Magic(mime=True)
     m.file = m.from_file
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:],'b:cvfdhmklD:L:C:ortR',
+    opts, args = getopt.getopt(sys.argv[1:],'b:cvfdhmklD:L:C:orM:tRFT:n',
             ['begin=','create','verbose','force','download','help','manifest','kml',
                 'list','data=','products=','configuration=','overwrite',
-                'resume','test','refresh'])
+                'resume','test','refresh', 'forever', 'forevertime=',
+                'noretry', 'retrytime='])
 except getopt.GetoptError:
     usage()
     sys.exit(3)
@@ -275,20 +317,32 @@ for opt, arg in opts:
         overwrite = True
     if opt in ['-r','--resume']:
         resume = True
+    if opt in ['-n','--noretry']:
+        retry = False
+    if opt in ['-M','--retrytime']:
+        resume = True
+        retrying_time = int(arg)
     if opt in ['-t','--test']:
         test = True
     if opt in ['-R','--refresh']:
         refresh = True
-        force = True
+    if opt in ['-F','--forever']:
+        forever = True
+    if opt in ['-T','--forevertime']:
+        forever = True
+        waiting_time = int(arg)
     if opt in ['-h','--help']:
         help()
         sys.exit(5)
 
 try:
     db = sqlite.connect(db_file)
-except sqlite.Error, e:
-    print 'Error %s:' % e.args[0]
+except sqlite.Error as e:
+    print('Error %s:' % e.args[0])
     sys.exit(1)
+
+if refresh:
+    force = True
 
 if create_db:
     cur = db.cursor()
@@ -297,7 +351,7 @@ if create_db:
                 hash text, name text, idate text, bdate text, edate text, 
                 ptype text, direction text, orbitno integer, 
                 relorbitno integer, footprint text, platform text,
-                footprint_r1 text, centroid_r1 text);
+                footprint_r1 text, centroid_r1 text, outdir text);
             CREATE UNIQUE INDEX h ON products(hash);
             CREATE INDEX id ON products(idate);
             CREATE INDEX bd ON products(bdate);
@@ -309,11 +363,11 @@ if create_db:
             CREATE INDEX rorbno ON products(relorbitno);
             CREATE INDEX fpr1 ON products(footprint_r1);
             CREATE INDEX c1 ON products(centroid_r1);
+            CREATE INDEX od ON products(outdir);
             ''')
     db.commit()
     db.close()
-    if verbose:
-        print "Database created"
+    say("Database created")
     sys.exit(0)
 
 auth = ''
@@ -330,12 +384,12 @@ try:
             searchbase = realms[realm]['searchbase']
             servicebase = realms[realm]['servicebase']
         except KeyError:
-            print 'Realm not found: %s' % realm
+            print('Realm not found: %s' % realm)
             sys.exit(6)
     password = config.get('Authentication','password')
     auth = user + ':' + password
-except configparser.Error, e:
-    print 'Error parsing configuration file: %s' % e
+except configparser.Error as e:
+    print('Error parsing configuration file: %s' % e)
     sys.exit(4)
 
 general_platform = None
@@ -348,8 +402,8 @@ try:
     general_type = norm_type(config.get('Global','type'))
     general_direction = norm_direction(config.get('Global','direction'))
     general_ccperc = config.get('Global','cloudcoverpercentage')
-    general_directory = config.get('Global','directory')
-except configparser.Error, e:
+    general_directory = norm_dir(config.get('Global','directory'))
+except configparser.Error as e:
     pass
 if general_platform:
     default_platform = general_platform
@@ -385,9 +439,14 @@ try:
         platforms.append(platform)
     directory_items = config.items('Directories')
     for key, directory in directory_items:
-        directories.append(directory)
+        if directory:
+            directories.append(directory)
+        else:
+            directories.append(os.path.abspath('.'))
 except:
     pass
+
+
 
 for i in range(len(polygons)):
     try:
@@ -403,223 +462,234 @@ for i in range(len(polygons)):
     except IndexError:
         directions.append(default_direction)
     try:
-        directories[i] = os.path.abspath(directories[i])
+        directories[i] = norm_dir(directories[i])
     except IndexError:
-        directories.append(os.path.abspath(default_directory))
+        directories.append(default_directory)
 
-    if verbose:
-        print 'Polygon: %s, %s, %s, %s, %s' % \
-            (polygons[i], platforms[i], types[i], directions[i],directories[i])
+        say('Polygon: %s, %s, %s, %s, %s' % \
+            (polygons[i], platforms[i], types[i], directions[i], directories[i]))
 
 if not len(auth):
-    print 'Missing ESA SCIHUB authentication information'
+    print('Missing ESA SCIHUB authentication information')
     sys.exit(7)
 
 
-if not refresh:
+do = True
 
-    cur = db.cursor()
-    cur.execute('''select date(idate) as d from products order by d desc limit 1''')
-    last = cur.fetchone()
-    if last is None or force:
-        last = []
-        last.append(begin_date)
+while do:
 
-    if verbose:
-        print 'Latest ingestion date considered: %s' % last[0]
 
-    refdate = last[0] + 'T00:00:00.000Z'
+    if not refresh:
 
-    criteria = []
-    for i in range(len(polygons)):
-        criteria.append({'platform':platforms[i] , \
-                         'type':types[i], 'direction': directions[i], \
-                         'polygon':polygons[i]})
+        cur = db.cursor()
+        cur.execute('''select date(idate) as d from products order by d desc limit 1''')
+        last = cur.fetchone()
+        if last is None or force:
+            last = []
+            last.append(begin_date)
 
-    params = []
-    for criterium in criteria:
-        if criterium['direction'] in ['ASCENDING','DESCENDING']:
-            params.append({'q': '''ingestiondate:[%s TO NOW] AND platformname:%s AND producttype:%s AND orbitdirection:%s AND footprint:"Intersects(%s)"''' % \
-                (refdate, criterium['platform'], criterium['type'], \
-                 criterium['direction'],criterium['polygon']), \
-                 })
-        else:
-            params.append({'q': '''ingestiondate:[%s TO NOW] AND platformname:%s AND producttype:%s AND footprint:"Intersects(%s)"''' % \
-                (refdate, criterium['platform'], criterium['type'], \
-                 criterium['polygon']), \
-                 })
+        say('Latest ingestion date considered: %s' % last[0])
 
-    # urls need encoding due to complexity of arguments
+        refdate = last[0] + 'T00:00:00.000Z'
 
-    urls = []
-    for param in params:
-        urls.append(searchbase + '?' + urllib.urlencode(param))
+        criteria = []
+        for i in range(len(polygons)):
+            criteria.append({'platform':platforms[i] , \
+                             'type':types[i], 'direction':directions[i], \
+                             'polygon':polygons[i]})
 
-    for url in urls:
-        page = 0
-        while True: 
-            stop = True
-            page_url = url + '&' + urllib.urlencode({'rows': 100,'start' : page*100})
-            buffer = StringIO()
-            c = pycurl.Curl()
-            c.setopt(c.URL,str(page_url))
-            c.setopt(c.USERPWD,auth)
-            c.setopt(c.FOLLOWLOCATION, True)
-            c.setopt(c.SSL_VERIFYPEER, False)
-            c.setopt(c.WRITEFUNCTION,buffer.write)
-            if verbose:
-                print "get %s..." % page_url
-            c.perform()
-            c.close()
+        params = []
+        for criterium in criteria:
+            if not criterium['platform'] in ['ANY',]:
+                str_platform = " AND platformname:%s " % criterium['platform']
+            else:
+                str_platform = ""
 
-            body = buffer.getvalue()
-            if output_list:
-                print body + '\n'
-            try:
-                root = et.fromstring(body)
-            except et.ParseError:
-                print(body)
-                sys.exit(2)
+            if not criterium['direction'] in ['ANY',]:
+                str_direction = " AND orbitdirection:%s " % criterium['direction']
+            else:
+                str_direction = ""
 
-            for entry in root.iter('{http://www.w3.org/2005/Atom}entry'):
-                id = entry.find('{http://www.w3.org/2005/Atom}id').text
-                title = entry.find('{http://www.w3.org/2005/Atom}title').text
-                footprint = ''
-                orbitdirection = ''
-                producttype = ''
-                beginposition = ''
-                endposition = ''
-                ingdate = ''
-                for string in entry.iter('{http://www.w3.org/2005/Atom}str'):
-                    if string.attrib.has_key('name'):
-                        if string.attrib['name'] == 'footprint':
-                            footprint = string.text
-                        if string.attrib['name'] == 'orbitdirection':
-                            orbitdirection = string.text
-                        if string.attrib['name'] == 'producttype':
-                            producttype = string.text
-                        if string.attrib['name'] == 'platformname':
-                            platform = string.text
-                for string in entry.iter('{http://www.w3.org/2005/Atom}date'):
-                    if string.attrib.has_key('name'):
-                        if string.attrib['name'] == 'ingestiondate':
-                            ingdate = string.text
-                        if string.attrib['name'] == 'beginposition':
-                            beginposition = string.text
-                        if string.attrib['name'] == 'endposition':
-                            endposition = string.text
-                for string in entry.iter('{http://www.w3.org/2005/Atom}int'):
-                    if string.attrib.has_key('name'):
-                        if string.attrib['name'] == 'orbitnumber':
-                            orbitno = string.text
-                        if string.attrib['name'] == 'relativeorbitnumber':
-                            relorbitno = string.text
-                products.append([id,title,ingdate,footprint,beginposition,endposition,orbitdirection,producttype,orbitno,relorbitno,platform])
-                # still products available, guess we can query again...
-                stop = False
-                if verbose:
-                    print products[-1]
-            page = page + 1
-            if stop:
-                break
-else:
+            if not criterium['type'] in ['ANY',]:
+                str_type = " AND producttype:%s " % criterium['type']
+            else:
+                str_type = ""
 
-    cur = db.cursor()
-    for entry in cur.execute('''SELECT * FROM products order by idate desc'''):
-        products.append([entry[1],entry[2],entry[3],entry[10],entry[4], \
-            entry[5],entry[7],entry[6],entry[8],entry[9],entry[11]])
-        if verbose:
-            print products[-1]
+            params.append({'q': '''ingestiondate:[%s TO NOW]%s%s%sAND footprint:"Intersects(%s)"''' % \
+                    (refdate, str_platform, str_type, str_direction, criterium['polygon']), })
 
-cur = db.cursor()
+        # urls need encoding due to complexity of arguments
 
-if list_products:
-    pf = open(productsfile,'w')
+        urls = []
+        for param in params:
+            urls.append(searchbase + '?' + urllib.parse.urlencode(param))
 
-for product in products:
-    uniqid = product[0]
-    name = product[1]
-    idate = isodate(product[2])
-    footprint = product[3]
-    bdate = isodate(product[4])
-    edate = isodate(product[5])
-    direction = product[6]
-    ptype = product[7]
-    orbitno = product[8]
-    relorbitno = product[9]
-    platform = product[10]
-    cur.execute('''SELECT COUNT(*) FROM products WHERE hash=?''',(uniqid,))
-    row = cur.fetchone()
-
-    if list_products:
-        pf.write('%s\n' % name)
-
-    if not row[0] or force:
-        if manifest_download:
-            manifest = "%s/Products('%s')/Nodes('%s.SAFE')/Nodes('manifest.safe')/$value" % (servicebase,uniqid,name)
-            filename = "%s.manifest" % name
-            if verbose:
-                print "downloading %s manifest file..." % name
-            with open(filename, 'wb') as f:
+        for index, url in enumerate(urls):
+            page = 0
+            outdir = directories[index]
+            while True: 
+                stop = True
+                page_url = url + '&' + urllib.parse.urlencode({'rows': 100,'start' : page*100})
+                buffer = BytesIO()
                 c = pycurl.Curl()
-                c.setopt(c.URL,manifest)
+                c.setopt(c.URL,str(page_url))
+                c.setopt(c.USERPWD,auth)
                 c.setopt(c.FOLLOWLOCATION, True)
                 c.setopt(c.SSL_VERIFYPEER, False)
-                c.setopt(c.USERPWD,auth)
-                c.setopt(c.WRITEFUNCTION,f.write)
+                c.setopt(c.WRITEFUNCTION,buffer.write)
+                say("get %s..." % page_url)
                 c.perform()
                 c.close()
 
-        if data_download:
-            data = "%s/Products('%s')/$value" % (servicebase, uniqid)
-            filename = "%s.zip" % name
-            if overwrite or not os.path.exists(filename) or not zipfile.is_zipfile(filename) or (test and not testzip(filename)):
-                if verbose: 
-                    print "downloading %s data file..." % name
+                body = buffer.getvalue()
+                if output_list:
+                    print(body + '\n')
+                try:
+                    root = et.fromstring(body)
+                except et.ParseError:
+                    print(body)
+                    sys.exit(2)
 
-                loop = True
-                while loop:
-                    if not overwrite and resume and os.path.exists(filename) and m.file(filename) == 'application/zip' :
-                        counter = os.path.getsize(filename)
-                        mode = 'ab'
-                        if verbose:
-                            print "resuming download starting from byte %d" % counter
-                    else:
-                        counter = 0
-                        mode = 'wb'
-                    with open(filename, mode) as f:
+                for entry in root.iter('{http://www.w3.org/2005/Atom}entry'):
+                    id = entry.find('{http://www.w3.org/2005/Atom}id').text
+                    title = entry.find('{http://www.w3.org/2005/Atom}title').text
+                    footprint = ''
+                    orbitdirection = ''
+                    producttype = ''
+                    beginposition = ''
+                    endposition = ''
+                    ingdate = ''
+                    for string in entry.iter('{http://www.w3.org/2005/Atom}str'):
+                        if 'name' in string.attrib:
+                            if string.attrib['name'] == 'footprint':
+                                footprint = string.text
+                            if string.attrib['name'] == 'orbitdirection':
+                                orbitdirection = string.text
+                            if string.attrib['name'] == 'producttype':
+                                producttype = string.text
+                            if string.attrib['name'] == 'platformname':
+                                platform = string.text
+                    for string in entry.iter('{http://www.w3.org/2005/Atom}date'):
+                        if 'name' in string.attrib:
+                            if string.attrib['name'] == 'ingestiondate':
+                                ingdate = string.text
+                            if string.attrib['name'] == 'beginposition':
+                                beginposition = string.text
+                            if string.attrib['name'] == 'endposition':
+                                endposition = string.text
+                    for string in entry.iter('{http://www.w3.org/2005/Atom}int'):
+                        if 'name' in string.attrib:
+                            if string.attrib['name'] == 'orbitnumber':
+                                orbitno = string.text
+                            if string.attrib['name'] == 'relativeorbitnumber':
+                                relorbitno = string.text
+                    products.append([id,title,ingdate,footprint,beginposition,endposition,orbitdirection,producttype,orbitno,relorbitno,platform,outdir,])
+                    # still products available, guess we can query again...
+                    stop = False
+                    say(products[-1])
+                page = page + 1
+                if stop:
+                    break
+    else:
+
+        say("Refreshing from database contents...")
+        cur = db.cursor()
+        for entry in cur.execute('''SELECT * FROM products order by idate desc'''):
+            products.append([entry[1],entry[2],entry[3],entry[10],entry[4], \
+                entry[5],entry[7],entry[6],entry[8],entry[9],entry[11],entry[14],])
+            say(products[-1])
+
+    cur = db.cursor()
+
+    if list_products:
+        pf = open(productsfile,'w')
+
+    for product in products:
+        uniqid = product[0]
+        name = product[1]
+        idate = isodate(product[2])
+        footprint = product[3]
+        bdate = isodate(product[4])
+        edate = isodate(product[5])
+        direction = product[6]
+        ptype = product[7]
+        orbitno = product[8]
+        relorbitno = product[9]
+        platform = product[10]
+        outdir = product[11]
+        cur.execute('''SELECT COUNT(*) FROM products WHERE hash=?''',(uniqid,))
+        row = cur.fetchone()
+
+        if list_products:
+            pf.write('%s\n' % name)
+
+        if not row[0] or force:
+            if manifest_download:
+                manifest = "%s/Products('%s')/Nodes('%s.SAFE')/Nodes('manifest.safe')/$value" % (servicebase,uniqid,name)
+                filename = "%s.manifest" % name
+                if overwrite or not os.path.exists(os.path.join(outdir, filename)):
+                    say("downloading %s manifest file..." % name)
+                    with open(os.path.join(outdir, filename), 'wb') as f:
                         c = pycurl.Curl()
-                        c.setopt(c.URL,data)
+                        c.setopt(c.URL,manifest)
                         c.setopt(c.FOLLOWLOCATION, True)
                         c.setopt(c.SSL_VERIFYPEER, False)
                         c.setopt(c.USERPWD,auth)
                         c.setopt(c.WRITEFUNCTION,f.write)
-                        c.setopt(c.RESUME_FROM_LARGE,counter)
-                        c.setopt(c.FAILONERROR,True)
-                        c.setopt(c.LOW_SPEED_LIMIT,100)
-                        c.setopt(c.LOW_SPEED_TIME,300)
-                        try:
-                            c.perform()
-                            loop = False
-                        except:
-                            loop = True
-                            if verbose:
-                                print "download failed, restarting in 5 minutes..."
-                                time.sleep(300)
+                        c.perform()
                         c.close()
-                        if m.file(filename) != 'application/zip':
-                            loop = True
-                            if verbose:
-                                print "downloaded file invalid, restarting in 5 minutes..."
-                                time.sleep(300)
-            else:
-                if verbose:
-                    print "skipping existing file %s" % filename
+                else:
+                    say("skipping existing %s manifest file" % name)
+
+            if data_download:
+                data = "%s/Products('%s')/$value" % (servicebase, uniqid)
+                filename = "%s.zip" % name
+                fullname = os.path.join(outdir,filename)
+                if overwrite or not os.path.exists(fullname) or not zipfile.is_zipfile(fullname) or \
+                            (test and not testzip(fullname)):
+                    say("downloading %s data file..." % name)
+
+                    loop = True
+                    while loop:
+                        if not overwrite and resume and os.path.exists(fullname) and m.file(fullname) == 'application/zip' :
+                            counter = os.path.getsize(fullname)
+                            mode = 'ab'
+                            say("resuming download starting from byte %d" % counter)
+                        else:
+                            counter = 0
+                            mode = 'wb'
+                        with open(fullname, mode) as f:
+                            c = pycurl.Curl()
+                            c.setopt(c.URL,data)
+                            c.setopt(c.FOLLOWLOCATION, True)
+                            c.setopt(c.SSL_VERIFYPEER, False)
+                            c.setopt(c.USERPWD,auth)
+                            c.setopt(c.WRITEFUNCTION,f.write)
+                            c.setopt(c.RESUME_FROM_LARGE,counter)
+                            c.setopt(c.FAILONERROR,True)
+                            c.setopt(c.LOW_SPEED_LIMIT,100)
+                            c.setopt(c.LOW_SPEED_TIME,300)
+                            try:
+                                c.perform()
+                                loop = False
+                            except:
+                                if retry: 
+                                    loop = True
+                                    say("download failed, restarting in %d seconds..." % retrying_time)
+                                    time.sleep(retrying_time)
+                            c.close()
+                            if m.file(fullname) != 'application/zip':
+                                if retry:
+                                    loop = True
+                                    say("downloaded file invalid, restarting in %d seconds..." % retrying_time)
+                                    time.sleep(retrying_time)
+                else:
+                    say("skipping existing file %s" % filename)
 
 
-        if kml:
-            poly = ogr.CreateGeometryFromWkt(footprint)
-            style = '''<Style
+            if kml:
+                poly = ogr.CreateGeometryFromWkt(footprint)
+                style = '''<Style
 id="ballon-style"><BalloonStyle><text><![CDATA[
 Name = $[Name]
 IngestionDate = $[IngestionDate]
@@ -633,7 +703,7 @@ Platform = $[PlatformName]
 ]]>
 </text></BalloonStyle></Style>
 '''
-            extdata = '''<ExtendedData>
+                extdata = '''<ExtendedData>
 <Data name="Name"><value>%s</value></Data>
 <Data name="IngestionDate"><value>%s</value></Data>
 <Data name="BeginDate"><value>%s</value></Data>
@@ -644,30 +714,39 @@ Platform = $[PlatformName]
 <Data name="RelativeOrbitNumber"><value>%s</value></Data>
 <Data name="PlatformName"><value>%s</value></Data>
 </ExtendedData> ''' % (name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,platform)
-            buff = '''<?xml version="1.0" encoding="UTF-8"?>
+                buff = '''<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
 <Document>%s<Placemark><name>%s</name><StyleUrl>#ballon-style</StyleUrl>%s%s</Placemark></Document></kml>''' % (style,name,extdata,poly.ExportToKML())
-            kmlfile = open(name+'.kml','w')
-            kmlfile.write(buff)
-            kmlfile.close()
-            if verbose:
-                print "KML file %s.kml created" % name
+                if overwrite or not os.path.exists(os.path.join(outdir, name+'.kml')):
+                    kmlfile = open(os.path.join(outdir, name)+'.kml','w')
+                    kmlfile.write(buff)
+                    kmlfile.close()
+                    say("KML file %s.kml created" % name)
+                else:
+                    say("KML file %s.kml skipped" % name)
 
-        if not refresh:
-            simple = shapely.wkt.loads(footprint)
-            footprint_r1 = shapely.wkt.dumps(simple,rounding_precision=1)
-            centroid_r1 = shapely.wkt.dumps(simple.centroid,rounding_precision=1)
-            cur.execute('''INSERT OR REPLACE INTO products 
-                    (id,hash,name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,footprint,platform,footprint_r1,centroid_r1) 
-                    VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?)''', 
-                    (uniqid,name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,footprint,platform,footprint_r1,centroid_r1))
-            db.commit()
+            if not refresh:
+                simple = shapely.wkt.loads(footprint)
+                footprint_r1 = shapely.wkt.dumps(simple,rounding_precision=1)
+                centroid_r1 = shapely.wkt.dumps(simple.centroid,rounding_precision=1)
+                cur.execute('''INSERT OR REPLACE INTO products 
+                        (id,hash,name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,footprint,platform,footprint_r1,centroid_r1,outdir) 
+                        VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''', 
+                        (uniqid,name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,footprint,platform,footprint_r1,centroid_r1,outdir))
+                db.commit()
+        else:
+            say("skipping %s" % name)
+
+    if list_products:
+        pf.close()
+
+    if not forever:
+        do = False
     else:
-        if verbose:
-            print "skipping %s" % name
-
-if list_products:
-    pf.close()
+        say("Wating %d seconds" % waiting_time)
+        db.close()
+        time.sleep(waiting_time)
+        db = sqlite.connect(db_file)
 
 db.close()
 sys.exit(0)

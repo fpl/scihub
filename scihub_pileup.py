@@ -100,9 +100,9 @@ split = False
 kml = False
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:],'m:A:hd:avt:Ws',
+    opts, args = getopt.getopt(sys.argv[1:],'m:A:hd:avt:Wsk',
             ['master','area','help','database','auto','verbose','type',
-            'warranty','split'])
+            'warranty','split','kml'])
 except getopt.GetoptError:
     help()
     sys.exit(3)
