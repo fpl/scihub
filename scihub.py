@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-#   Copyright (C) 2015-2017 Francesco P. Lovergine <francesco.lovergine@cnr.it>
+#   Copyright (C) 2015-2018 Francesco P. Lovergine <francesco.lovergine@cnr.it>
 #
 #   This program is free software: you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
@@ -268,7 +268,7 @@ default_platform = 'Sentinel-1'
 default_type = 'GRD'
 default_ccp = 5
 default_directory = os.path.abspath('.')
-waiting_time = 14400
+waiting_time = 28800
 retrying_time = 300
 
 try:
