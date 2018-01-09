@@ -743,7 +743,7 @@ Platform = $[PlatformName]
     if not forever:
         do = False
     else:
-        say("Wating %d seconds" % waiting_time)
+        say("Waiting %d seconds" % waiting_time)
         db.close()
         time.sleep(waiting_time)
         db = sqlite.connect(db_file)

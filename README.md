@@ -1,6 +1,9 @@
 Copernicus Sentinel Science Hub rolling archive downloader
 ==========================================================
 
+[ _You could be also interested in https://github.com/fpl/scihub-qgis-plugin_ ]
+
+
 This is an easy script to download Sentinel data from the ESA rolling archive
 located at the Copernicus Scientific Data Hub ttps://scihub.copernicus.eu/
 
