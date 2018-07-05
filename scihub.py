@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-#   Copyright (C) 2015-2017 Francesco P. Lovergine <francesco.lovergine@cnr.it>
+#   Copyright (C) 2015-2018 Francesco P. Lovergine <francesco.lovergine@cnr.it>
 #
 #   This program is free software: you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
@@ -192,7 +192,8 @@ def norm_type(val):
     if slc.match(val):
         return 'SLC'
     if msl2.match(val):
-        return 'S2MSI2Ap'
+        return 'S2MSI2A'
+#        return 'S2MSI2Ap'
     if msl1.match(val):
         return 'S2MSI1C'
     if a.match(val):
