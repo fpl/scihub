@@ -102,6 +102,7 @@ import re
 import time
 import magic
 import dateutil.parser
+from pathlib import Path
 
 def usage():
     print('''usage: %s [-b date|-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-m|-v|-o|-r|-n|-t|-R|-F|-M int |-T int]''' % sys.argv[0])
@@ -607,6 +608,7 @@ while do:
 
     for product in products:
         uniqid = product[0]
+        sub = uniqid[0:4]
         name = product[1]
         idate = isodate(product[2])
         footprint = product[3]
@@ -621,6 +623,8 @@ while do:
         cur.execute('''SELECT COUNT(*) FROM products WHERE hash=?''',(uniqid,))
         row = cur.fetchone()
 
+        Path(os.path.join(outdir,sub)).mkdir(parents=True, exists_ok=True)
+
         if list_products:
             pf.write('%s\n' % name)
 
@@ -628,9 +632,9 @@ while do:
             if manifest_download:
                 manifest = "%s/Products('%s')/Nodes('%s.SAFE')/Nodes('manifest.safe')/$value" % (servicebase,uniqid,name)
                 filename = "%s.manifest" % name
-                if overwrite or not os.path.exists(os.path.join(outdir, filename)):
+                if overwrite or not os.path.exists(os.path.join(outdir, sub, filename)):
                     say("downloading %s manifest file..." % name)
-                    with open(os.path.join(outdir, filename), 'wb') as f:
+                    with open(os.path.join(outdir, sub, filename), 'wb') as f:
                         c = pycurl.Curl()
                         c.setopt(c.URL,manifest)
                         c.setopt(c.FOLLOWLOCATION, True)
@@ -645,7 +649,7 @@ while do:
             if data_download:
                 data = "%s/Products('%s')/$value" % (servicebase, uniqid)
                 filename = "%s.zip" % name
-                fullname = os.path.join(outdir,filename)
+                fullname = os.path.join(outdir, sub, filename)
                 if overwrite or not os.path.exists(fullname) or not zipfile.is_zipfile(fullname) or \
                             (test and not testzip(fullname)):
                     say("downloading %s data file..." % name)
@@ -718,8 +722,8 @@ Platform = $[PlatformName]
                 buff = '''<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
 <Document>%s<Placemark><name>%s</name><StyleUrl>#ballon-style</StyleUrl>%s%s</Placemark></Document></kml>''' % (style,name,extdata,poly.ExportToKML())
-                if overwrite or not os.path.exists(os.path.join(outdir, name+'.kml')):
-                    kmlfile = open(os.path.join(outdir, name)+'.kml','w')
+                if overwrite or not os.path.exists(os.path.join(outdir, sub, name+'.kml')):
+                    kmlfile = open(os.path.join(outdir, sub, name)+'.kml','w')
                     kmlfile.write(buff)
                     kmlfile.close()
                     say("KML file %s.kml created" % name)
