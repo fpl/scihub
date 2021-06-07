@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-#   Copyright (C) 2015-2018 Francesco P. Lovergine <francesco.lovergine@cnr.it>
+#   Copyright (C) 2015-2021 Francesco P. Lovergine <francesco.lovergine@cnr.it>
 #
 #   This program is free software: you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
@@ -16,85 +16,9 @@
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-#
-# SciHub documentation can be read here:
-# https://scihub.esa.int/userguide/BatchScripting
-#
-# An example of .cfg inifile used by this script:
-#	 [Global]
-#
-#	 ;
-#	 ; This sections contains default specs for parameters which can be
-#	 ; overriden for each polygon item
-#	 ;
-#
-#	 platform = Sentinel-1
-#	 type = SLC
-#	 direction = Any
-#
-#    directory = /my/own/path/for/products
-#
-#    ; you can also use any environment variable that will be expanded before
-#    ; use e.g.
-#    ; directory = $PWD
-#    ; An empty value means current working directory, as well
-#
-#	 ; this is only useful with S-2 images
-#
-#	 cloudcoverpercentage = 10
-#
-#    ;
-#    ; Polygons, types and directions need to be coherent each other and list
-#    ; the same number of items.
-#    ;
-#    
-#    [Polygons]
-#    
-#    polygon1 = POLYGON((15.819485626219 40.855620164394,16.445706329344 40.855620164394,16.445706329344 41.120994219991,15.819485626219 41.120994219991,15.819485626219 40.855620164394))
-#    polygon2 = POLYGON((16.349232635497 40.791189284951,16.909535369872 40.791189284951,16.909535369872 41.131338714384,16.349232635497 41.131338714384,16.349232635497 40.791189284951))
-#    polygon3 = POLYGON((17.349232635497 40.791189284951,16.909535369872 40.791189284951,16.909535369872 41.131338714384,16.349232635497 41.131338714384,17.349232635497 40.791189284951))
-#    
-#    [Platforms]
-#
-#    platform1 = Sentinel-1
-#    platform2 = S-1
-#    platform3 = ANY
-#
-#    [Types]
-#    
-#    type1 = SLC
-#    type2 = SLC
-#    type3 = ANY
-#    
-#    [Directions]
-#    
-#    direction1 = Descending
-#    direction2 = Ascending
-#    direction3 = ANY
-#
-#    [Directories]
-#
-#    directory1 = /alternative/path
-#    directory2 = $HOME/
-#    
-#    [Authentication]
-#    username = XXXXXXXX
-#    password = YYYYYYY
-#
-# This file can be stored as /usr/local/etc/scihub.cfg or $HOME/.scihub.cfg or
-# splitted among them, as more convenient. You can additionally pass its name as a
-# command line argument.
-#    
-
-import pycurl
-import urllib.request, urllib.parse, urllib.error
 import sys
 import getopt
 import os.path
-import configparser 
-import sqlite3 as sqlite
-import xml.etree.ElementTree as et
-from io import BytesIO
 from osgeo import ogr
 import shapely.wkt
 import zipfile
@@ -102,6 +26,10 @@ import re
 import time
 import magic
 import dateutil.parser
+from pathlib import Path
+
+from sentinelsat.sentinel import SentinelAPI
+from ruamel import yaml
 
 def usage():
     print('''usage: %s [-b date|-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-m|-v|-o|-r|-n|-t|-R|-F|-M int |-T int]''' % sys.argv[0])
@@ -116,11 +44,11 @@ usage: %s [-b date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-r|-t|-R]
     -c --create create db only
     -d --download download data .zip file
     -D --data=<path> name of SQLite database to use
-    -C --configuration= <path> configuration file to use
+    -C --configuration=<path> YAML configuration file to use
     -f --force force
     -h --help this help
     -k --kml create KML skeleton addon files
-    -l --list output XML list of entries
+    -l --list output list of entries
     -m --manifest download manifest files
     -v --verbose run verbosely
     -L --products=<path> output products names to file
@@ -134,11 +62,10 @@ usage: %s [-b date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-r|-t|-R]
     -T --forevertime=<time> loop time of waiting
 
 An ESA SCIHUB username and password profile is required and read from a
-scihub configuration file, such as:
+scihub configuration YAML file, such as:
 
-    [Autentication]
-    username = <user>[@realm]
-    password = <xxxx>
+ username: <user>[@realm]
+ password: <xxxx>
 
 Note that different realms can be used if the user is able to access not only
 the main SciHub server but any other regional mirror or Collaborative Ground
@@ -208,41 +135,16 @@ def say(*args):
         print(' '.join(map(str, args)))
 
 realms = {
-    'apihub.esa.int' : {
-        'searchbase' : 'https://scihub.copernicus.eu/apihub/search',
-        'servicebase' : 'https://scihub.copernicus.eu/apihub/odata/v1'
-    },
-    'esa.int' : {
-        'searchbase' : 'https://scihub.copernicus.eu/dhus/search',
-        'servicebase' : 'https://scihub.copernicus.eu/dhus/odata/v1'
-    },
-    'asi.it' : {
-        'searchbase' : 'http://collaborative.mt.asi.it/search',
-        'servicebase' : 'http://collaborative.mt.asi.it/odata/v1'
-    },
-    'fmi.fi' : {
-        'searchbase' : 'https://finhub.nsdc.fmi.fi/search',
-        'servicebase' : 'https://finhub.nsdc.fmi.fi/odata/v1'
-    },
-    'noa.gr' : {
-        'searchbase' : 'https://sentinels.space.noa.gr/dhus/search',
-        'servicebase' : 'https://sentinels.space.noa.gr/dhus/odata/v1'
-    },
-    'colhub1' : {
-        'searchbase' : 'https://colhub.copernicus.eu/dhus/search',
-        'servicebase' : 'https://colhub.copernicus.eu/dhus/odata/v1'
-    },
-    'colhub2' : {
-        'searchbase' : 'https://colhub2.copernicus.eu/dhus/search',
-        'servicebase' : 'https://colhub2.copernicus.eu/dhus/odata/v1'
-    },
-    'inthub' : {
-        'searchbase' : 'https://inthub.copernicus.eu/dhus/search',
-        'servicebase' : 'https://inthub.copernicus.eu/dhus/odata/v1'
-    },
+    'apihub.esa.int' : 'https://scihub.copernicus.eu/apihub',
+    'esa.int' : 'https://scihub.copernicus.eu/dhus',
+    'asi.it' : 'http://collaborative.mt.asi.it',
+    'fmi.fi' : 'https://finhub.nsdc.fmi.fi',
+    'noa.gr' : 'https://sentinels.space.noa.gr/dhus',
+    'colhub1' : 'https://colhub.copernicus.eu/dhus',
+    'colhub2' : 'https://colhub2.copernicus.eu/dhus',
+    'inthub' : 'https://inthub.copernicus.eu/dhus'
 }
-searchbase = realms['apihub.esa.int']['searchbase']
-servicebase = realms['apihub.esa.int']['servicebase']
+servicebase = realms['apihub.esa.int']
 
 products = []
 
@@ -253,10 +155,10 @@ verbose = False
 kml = False
 force = False
 create_db = False
-db_file = 'scihub.sqlite'
+db_file = 'scihub.splite'
 list_products = False
 overwrite = False
-configuration_file = '/usr/local/etc/scihub.cfg'
+configuration_file = '/usr/local/etc/scihub.yml'
 resume = False
 test = False
 refresh = False
@@ -337,8 +239,8 @@ for opt, arg in opts:
         sys.exit(5)
 
 try:
-    db = sqlite.connect(db_file)
-except sqlite.Error as e:
+    db = spatialite.connect(db_file)
+except spatialite.Error as e:
     print('Error %s:' % e.args[0])
     sys.exit(1)
 
@@ -362,8 +264,6 @@ if create_db:
             CREATE INDEX orbno ON products(orbitno);
             CREATE INDEX p ON products(platform);
             CREATE INDEX rorbno ON products(relorbitno);
-            CREATE INDEX fpr1 ON products(footprint_r1);
-            CREATE INDEX c1 ON products(centroid_r1);
             CREATE INDEX od ON products(outdir);
             ''')
     db.commit()
@@ -375,15 +275,14 @@ auth = ''
 
 try:
     config = configparser.ConfigParser()
-    config.read([configuration_file,os.path.expanduser('~/.scihub.cfg')])
+    config.read([configuration_file,os.path.expanduser('~/.scihub.yml')])
 
     username = re.search('([^@]+)@?(.*)',config.get('Authentication','username'))
     user = username.group(1)
     realm = username.group(2)
     if realm:
         try:
-            searchbase = realms[realm]['searchbase']
-            servicebase = realms[realm]['servicebase']
+            servicebase = realms[realm]
         except KeyError:
             print('Realm not found: %s' % realm)
             sys.exit(6)
@@ -474,6 +373,8 @@ if not len(auth):
     print('Missing ESA SCIHUB authentication information')
     sys.exit(7)
 
+
+api = SentinelAPI(user, password, servicebase)
 
 do = True
 
@@ -607,6 +508,7 @@ while do:
 
     for product in products:
         uniqid = product[0]
+        sub = uniqid[0:4]
         name = product[1]
         idate = isodate(product[2])
         footprint = product[3]
@@ -621,6 +523,8 @@ while do:
         cur.execute('''SELECT COUNT(*) FROM products WHERE hash=?''',(uniqid,))
         row = cur.fetchone()
 
+        Path(os.path.join(outdir, sub)).mkdir(parents=True, exist_ok=True)
+
         if list_products:
             pf.write('%s\n' % name)
 
@@ -628,9 +532,9 @@ while do:
             if manifest_download:
                 manifest = "%s/Products('%s')/Nodes('%s.SAFE')/Nodes('manifest.safe')/$value" % (servicebase,uniqid,name)
                 filename = "%s.manifest" % name
-                if overwrite or not os.path.exists(os.path.join(outdir, filename)):
+                if overwrite or not os.path.exists(os.path.join(outdir, sub, filename)):
                     say("downloading %s manifest file..." % name)
-                    with open(os.path.join(outdir, filename), 'wb') as f:
+                    with open(os.path.join(outdir, sub, filename), 'wb') as f:
                         c = pycurl.Curl()
                         c.setopt(c.URL,manifest)
                         c.setopt(c.FOLLOWLOCATION, True)
@@ -645,7 +549,7 @@ while do:
             if data_download:
                 data = "%s/Products('%s')/$value" % (servicebase, uniqid)
                 filename = "%s.zip" % name
-                fullname = os.path.join(outdir,filename)
+                fullname = os.path.join(outdir, sub, filename)
                 if overwrite or not os.path.exists(fullname) or not zipfile.is_zipfile(fullname) or \
                             (test and not testzip(fullname)):
                     say("downloading %s data file..." % name)
@@ -718,8 +622,8 @@ Platform = $[PlatformName]
                 buff = '''<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
 <Document>%s<Placemark><name>%s</name><StyleUrl>#ballon-style</StyleUrl>%s%s</Placemark></Document></kml>''' % (style,name,extdata,poly.ExportToKML())
-                if overwrite or not os.path.exists(os.path.join(outdir, name+'.kml')):
-                    kmlfile = open(os.path.join(outdir, name)+'.kml','w')
+                if overwrite or not os.path.exists(os.path.join(outdir, sub, name+'.kml')):
+                    kmlfile = open(os.path.join(outdir, sub, name)+'.kml','w')
                     kmlfile.write(buff)
                     kmlfile.close()
                     say("KML file %s.kml created" % name)
