@@ -20,9 +20,8 @@ in sentinelsat per se. Specifically:
    been downloaded or not, and to store a set of geospatial metadata
    to query the archive with ordinary OGC SQL ST functions.
  * it creates useful KML add-on files filled with information taken from imagery metadata
- * it downloads the official manifest file along with (optionally) image kit
  * a simple YAML file format can be used to improve and customize
-   the script
+   the script configuration
  * All management and download operations can be run separately
  * data downloads can be checked and restarted on failure
  * it supports DHuS mirrors, thanks to @realm convention in authentication
@@ -36,52 +35,48 @@ crontab/timer job.
 
 What follows is an example of configuration YAML file used by this script:
 
-	--
+---
 
-	date: 2014-11-10
-	directory: /data/main/sentinel/archive
+all:
+  platform: S-1
+  type: GRD
+  direction: Any
+  items:
+    - aoi:
+      polygon: POLYGON ((144.26 -32.81,147.86 -32.81,147.86 -35.998,144.26 -35.998,144.26 -32.81))
+      directory: /tmp/data/Sentinel-1_archive/Yanco_archive
 
-	- site: 
-    	name: First
-		geometry: POLYGON((15.819485626219 40.855620164394,16.445706329344 40.855620164394,16.445706329344 41.120994219991,15.819485626219 41.120994219991,15.819485626219 40.855620164394))
-		date: 2018-04-21
-		directory: /home/foo
-		direction: ascending
-		- product:
-			platform: Sentinel-1
-			type: GRDH
-			direction: ascending
-			directory: /home/foo/sentinel-1
-			date: 2018-04-21 
-		- product:
-			platform: Sentinel-2
-			type: MSIL2
-			cloudcoverpercentage: 10
-			direction: any
-			directory: /home/foo/sentinel-2
-			date: 2020-04-12
-		- product:
-			platform: Sentinel-1
-			type: SLC
+    - aoi:
+      polygon: POLYGON ((-100.55 50.67,-96.35 50.67,-96.35 47.762,-100.55 47.762,-100.55 50.67))
+      directory: /tmp/data/Sentinel-1_archive/ElmCreek_archive
 
-	- site: 
-		name: Second
-		geometry: POLYGON((16.349232635497 40.791189284951,16.909535369872 40.791189284951, \
-			16.909535369872 41.131338714384,16.349232635497 41.131338714384,16.349232635497 40.791189284951))
-		directory: /data/scihub/archive
-		- product:
-			platform: S1 
-			type: GRDH
-			direction: asc
-			directory: $SOME_ENVIRONMENT_VARIABLE/sentinel/data
-			date: 2019-11-19
-		- product:
-			platform: S2
-			type: MSIL2
-			cloudcoverpercentage: 20
-			direction: descending
-			date: 2020-06-11
-			directory: $PWD
+    - aoi:
+      polygon: POLYGON ((-100.79 36.12,-97.582 36.12,-97.582 34.052,-100.79 34.052,-100.79 36.12))
+      directory: /tmp/data/Sentinel-1_archive/LittleWashita_archive
+
+    - aoi:
+      polygon: POLYGON ((20.53 54.95,25.158 54.95,25.158 51.942,20.53 51.942,20.53 54.95))
+      directory: /tmp/data/Sentinel-1_archive/Poland_archive
+
+    - aoi:
+      polygon: POLYGON ((8.15446235928205 57.6797621069406,10.7701315198645 57.672559958462,10.7663436347965 53.719444453071,7.71 53.9916504060973,8.15446235928205 57.6797621069406))
+      directory: /tmp/data/Sentinel-1_archive/Hobe_archive
+
+    - aoi:
+      polygon: POLYGON ((-99.77 31.62,-96.662 31.62,-96.662 29.4,-99.77 29.4,-99.77 31.62))
+      directory: /tmp/data/Sentinel-1_archive/TxSON_archive
+
+    - aoi:
+      polygon: POLYGON ((5.9532 52.0676,7.048 52.032,6.9952 49.948,5.9 49.9304,5.9532 52.0676))
+      directory: /tmp/data/SARSENSE_S1/Germany
+
+    - aoi:
+      polygon: POLYGON ((7.679771707123388 45.488568380045756,13.466264982898075 46.723232221305132,36.010241064894799 37.582947071503241,36.314421645072912 32.184725616868526,31.963195382196588 29.687765362998697,18.909516593567609 29.41959521817747,9.110692096066586 33.050217585529545,8.699552606660951 35.428401418400881,-5.793114394887761 34.502145739241485,-9.709678262248175 38.23185231330713,-8.818961263123319 43.620276606196732,7.679771707123388 45.488568380045756))
+      direction: ascending
+      directory: /tmp/Mediterraneo
+
+
 
 This file can be stored as `/usr/local/etc/scihub.yml` or `$HOME/.scihub.yml` or
-splitted among them, as more convenient.
+splitted among them, as more convenient. Generally the user YAML file is used
+to 
