@@ -55,12 +55,11 @@ db_file = 'scihub.splite'
 list_products = False
 overwrite = False
 configuration_file = '/usr/local/etc/scihub.yml'
-resume = False
 test = False
 refresh = False
 forever = False
-retry = True
 begin_date = '2014-01-01'
+end_date = None
 
 default_direction = 'Ascending'
 default_platform = 'Sentinel-1'
@@ -68,18 +67,18 @@ default_type = 'GRD'
 default_ccp = 5
 default_directory = os.path.abspath('.')
 waiting_time = 28800
-retrying_time = 300
 
 def usage():
     print('''usage: %s [-b date|-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-v|-o|-r|-n|-t|-R|-F|-M int |-T int]''' % sys.argv[0])
 
 def help():
     print('''
-usage: %s [-b date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-r|-t|-R]
+usage: %s [-b date|-e date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-r|-t|-R]
           [--create|--download|--configuration=path|--data=path|--force|--help|
            --kml|--list|--verbose|--products=path|--overwrite|--forever|
-           --forevertime=seconds|--resume|--retrytime=seconds|--test|--refresh]
+           --forevertime=seconds|--test|--refresh]
     -b --begin=<date> begin date to consider for products
+    -b --end=<date> end date to consider for products
     -c --create create db only
     -d --download download data .zip file
     -D --data=<path> name of Spatialite database to use
@@ -91,15 +90,12 @@ usage: %s [-b date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-r|-t|-R]
     -v --verbose run verbosely
     -L --products=<path> output products names to file
     -o --overwrite overwrite data .zip/kml file even if it exists
-    -r --resume try using resume to continue download
-    -M --retrytime=<int> time in secs of waiting
-    -n --noretry do not retry after a download failure
     -t --test test ZIP file at check time
     -R --refresh download missing/invalid/corrupted stuff on the basis of current db status
     -F --forever loop forever to download continuously images
     -T --forevertime=<time> loop time of waiting
 
-An ESA SCIHUB username and password profile is required and read from a
+A Copenicus Open Data Hub username and password profile is required and read from a
 scihub configuration YAML file, such as:
 
 username: <user>[@realm]
@@ -107,7 +103,7 @@ password: <xxxx>
 
 Note that different realms can be used if the user is able to access not only
 the main SciHub server but any other regional mirror or Collaborative Ground
-Segment. If not specified, the main ESA one will be used.
+Segment. If not specified, the main one (APIHUB) will be used.
 ''' % sys.argv[0])
 
 def testzip(filename):
@@ -255,6 +251,9 @@ for opt, arg in opts:
     if opt in ['-b','--begin']:
         d = dateutil.parser.parse(arg)
         begin_date = '%04d-%02d-%02d' % (d.year,d.month,d.day)
+    if opt in ['-e','--end']:
+        d = dateutil.parser.parse(arg)
+        end_date = '%04d-%02d-%02d' % (d.year,d.month,d.day)
     if opt in ['-c','--create']:
         create_db = True
     if opt in ['-d','--download']:
@@ -276,13 +275,6 @@ for opt, arg in opts:
         configuration_file = arg
     if opt in ['-o','--overwrite']:
         overwrite = True
-    if opt in ['-r','--resume']:
-        resume = True
-    if opt in ['-n','--noretry']:
-        retry = False
-    if opt in ['-M','--retrytime']:
-        resume = True
-        retrying_time = int(arg)
     if opt in ['-t','--test']:
         test = True
     if opt in ['-R','--refresh']:
@@ -434,8 +426,12 @@ while do:
 
         for index, polygon in enumerate(polygons):
             outdir = directories[index]
+            if end_date is None:
+                end_date = 'NOW'
+            else:
+                end_date = end_date + 'T23:59:59.000Z'
             args = {
-                'ingestiondate': (refdate,'NOW'), 
+                'ingestiondate': (refdate, end_date), 
                 'platformname': platforms[index], 
                 'producttype': types[index],
             }
@@ -491,6 +487,9 @@ while do:
     if list_products:
         pf = open(productsfile,'w')
 
+#
+# Now download products and/or create KML files
+#
     for product in products:
         uniqid = product[0]
         sub = uniqid[0:4]
@@ -537,7 +536,7 @@ while do:
                 cur.execute('''INSERT OR REPLACE INTO products 
                         (id,hash,name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,footprint,platform,footprint_r1,centroid_r1,outdir,_footprint) 
                         VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CastToMultipolygon(ST_GeomFromText(?,4326)))''', 
-                        (uniqid,name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,footprint,platform,footprint_r1,centroid_r1,outdir,footprint))
+                        (uniqid, name, idate, bdate, edate, ptype, direction, orbitno, relorbitno, footprint, platform, footprint_r1, centroid_r1, outdir, footprint))
         else:
             say("skipping %s" % name)
 
