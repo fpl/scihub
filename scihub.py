@@ -24,7 +24,6 @@ import shapely.wkt
 import zipfile
 import re
 import time
-import magic
 import dateutil.parser
 import spatialite
 from pathlib import Path
@@ -32,6 +31,44 @@ import datetime
 
 from sentinelsat.sentinel import SentinelAPI
 from ruamel.yaml import YAML
+
+realms = {
+    'apihub.esa.int' : 'https://apihub.copernicus.eu/apihub/',
+    'esa.int' : 'https://scihub.copernicus.eu/dhus/',
+    'fmi.fi' : 'https://finhub.nsdc.fmi.fi/',
+    'noa.gr' : 'https://sentinels.space.noa.gr/dhus/',
+    'colhub1' : 'https://colhub.copernicus.eu/dhus/',
+    'colhub2' : 'https://colhub2.copernicus.eu/dhus/',
+    'inthub' : 'https://inthub.copernicus.eu/dhus/'
+}
+servicebase = realms['apihub.esa.int']
+
+products = []
+
+data_download = False
+output_list = False
+verbose = False
+kml = False
+force = False
+create_db = False
+db_file = 'scihub.splite'
+list_products = False
+overwrite = False
+configuration_file = '/usr/local/etc/scihub.yml'
+resume = False
+test = False
+refresh = False
+forever = False
+retry = True
+begin_date = '2014-01-01'
+
+default_direction = 'Ascending'
+default_platform = 'Sentinel-1'
+default_type = 'GRD'
+default_ccp = 5
+default_directory = os.path.abspath('.')
+waiting_time = 28800
+retrying_time = 300
 
 def usage():
     print('''usage: %s [-b date|-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-v|-o|-r|-n|-t|-R|-F|-M int |-T int]''' % sys.argv[0])
@@ -123,7 +160,6 @@ def norm_type(val):
         return 'SLC'
     if msl2.match(val):
         return 'S2MSI2A'
-#        return 'S2MSI2Ap'
     if msl1.match(val):
         return 'S2MSI1C'
     if a.match(val):
@@ -137,50 +173,73 @@ def say(*args):
     if verbose:
         print(' '.join(map(str, args)))
 
-realms = {
-    'apihub.esa.int' : 'https://apihub.copernicus.eu/apihub/',
-    'esa.int' : 'https://scihub.copernicus.eu/dhus/',
-    'fmi.fi' : 'https://finhub.nsdc.fmi.fi/',
-    'noa.gr' : 'https://sentinels.space.noa.gr/dhus/',
-    'colhub1' : 'https://colhub.copernicus.eu/dhus/',
-    'colhub2' : 'https://colhub2.copernicus.eu/dhus/',
-    'inthub' : 'https://inthub.copernicus.eu/dhus/'
-}
-servicebase = realms['apihub.esa.int']
+def create_schema(db):
+    cur = db.cursor()
+    cur.executescript('''
+            BEGIN TRANSACTION;
+            CREATE TABLE products(id integer primary key, 
+                hash text, name text, idate text, bdate text, edate text, 
+                ptype text, direction text, orbitno integer, 
+                relorbitno integer, footprint text, platform text,
+                footprint_r1 text, centroid_r1 text, outdir text);
+            CREATE UNIQUE INDEX h ON products(hash);
+            CREATE INDEX id ON products(idate);
+            CREATE INDEX bd ON products(bdate);
+            CREATE INDEX ed ON products(edate);
+            CREATE INDEX dir ON products(direction);
+            CREATE INDEX t ON products(ptype);
+            CREATE INDEX orbno ON products(orbitno);
+            CREATE INDEX p ON products(platform);
+            CREATE INDEX rorbno ON products(relorbitno);
+            CREATE INDEX od ON products(outdir);
+            SELECT InitSpatialMetaData();
+            SELECT AddGeometryColumn( 'products', '_footprint', 4326, 'MULTIPOLYGON', 'XY');
+            SELECT CreateSpatialIndex('products', '_footprint');
+            COMMIT;
+            ''')
+    db.commit()
+    db.close()
+    say("Database created")
 
-products = []
+def create_kml(outdir, sub, name, footprint):
+    poly = ogr.CreateGeometryFromWkt(footprint)
+    style = '''<Style
+id="ballon-style"><BalloonStyle><text><![CDATA[
+Name = $[Name]
+IngestionDate = $[IngestionDate]
+BeginDate = $[BeginDate]
+EndDate = $[EndDate]
+ProductType = $[ProductType]
+OrbitDirection = $[OrbitDirection]
+OrbitNumber = $[OrbitNumber]
+RelativeOrbitNumber = $[RelativeOrbitNumber]
+Platform = $[PlatformName]
+]]>
+</text></BalloonStyle></Style>
+'''
+    extdata = '''<ExtendedData>
+<Data name="Name"><value>%s</value></Data>
+<Data name="IngestionDate"><value>%s</value></Data>
+<Data name="BeginDate"><value>%s</value></Data>
+<Data name="EndDate"><value>%s</value></Data>
+<Data name="ProductType"><value>%s</value></Data>
+<Data name="OrbitDirection"><value>%s</value></Data>
+<Data name="OrbitNumber"><value>%s</value></Data>
+<Data name="RelativeOrbitNumber"><value>%s</value></Data>
+<Data name="PlatformName"><value>%s</value></Data>
+</ExtendedData> ''' % (name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,platform)
+    buff = '''<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>%s<Placemark><name>%s</name><StyleUrl>#ballon-style</StyleUrl>%s%s</Placemark></Document></kml>''' % (style,name,extdata,poly.ExportToKML())
+    if overwrite or not os.path.exists(os.path.join(outdir, sub, name+'.kml')):
+        kmlfile = open(os.path.join(outdir, sub, name)+'.kml','w')
+        kmlfile.write(buff)
+        kmlfile.close()
+        say("KML file %s.kml created" % name)
+    else:
+        say("KML file %s.kml skipped" % name)
 
-data_download = False
-output_list = False
-verbose = False
-kml = False
-force = False
-create_db = False
-db_file = 'scihub.splite'
-list_products = False
-overwrite = False
-configuration_file = '/usr/local/etc/scihub.yml'
-resume = False
-test = False
-refresh = False
-forever = False
-retry = True
-begin_date = '2014-01-01'
-
-default_direction = 'Ascending'
-default_platform = 'Sentinel-1'
-default_type = 'GRD'
-default_ccp = 5
-default_directory = os.path.abspath('.')
-waiting_time = 28800
-retrying_time = 300
-
-try:
-    m = magic.open(magic.MAGIC_MIME_TYPE)
-    m.load()
-except AttributeError as e:
-    m = magic.Magic(mime=True)
-    m.file = m.from_file
+# Parsing command line arguments
 
 try:
     opts, args = getopt.getopt(sys.argv[1:],'b:cvfdhmklD:L:C:orM:tRFT:n',
@@ -247,42 +306,19 @@ if refresh:
     force = True
 
 if create_db:
-    cur = db.cursor()
-    cur.executescript('''
-            BEGIN TRANSACTION;
-            CREATE TABLE products(id integer primary key, 
-                hash text, name text, idate text, bdate text, edate text, 
-                ptype text, direction text, orbitno integer, 
-                relorbitno integer, footprint text, platform text,
-                footprint_r1 text, centroid_r1 text, outdir text);
-            CREATE UNIQUE INDEX h ON products(hash);
-            CREATE INDEX id ON products(idate);
-            CREATE INDEX bd ON products(bdate);
-            CREATE INDEX ed ON products(edate);
-            CREATE INDEX dir ON products(direction);
-            CREATE INDEX t ON products(ptype);
-            CREATE INDEX orbno ON products(orbitno);
-            CREATE INDEX p ON products(platform);
-            CREATE INDEX rorbno ON products(relorbitno);
-            CREATE INDEX od ON products(outdir);
-            SELECT InitSpatialMetaData();
-            SELECT AddGeometryColumn( 'products', '_footprint', 4326, 'MULTIPOLYGON', 'XY');
-            SELECT CreateSpatialIndex('products', '_footprint');
-            COMMIT;
-            ''')
-    db.commit()
-    db.close()
-    say("Database created")
+    create_schema(db)
     sys.exit(0)
 
 auth = ''
+
+# Read YAML configs
 
 try:
     yaml = YAML()
     config = yaml.load(Path(configuration_file))
     user_config = yaml.load(Path(os.path.expanduser('~/.scihub.yml')))
 
-    username = re.search('([^@]+)@?(.*)',user_config['username'])
+    username = re.search('([^@]+)@?(.*)', user_config['username'])
     user = username.group(1)
     realm = username.group(2)
     if realm:
@@ -297,11 +333,22 @@ except Exception as e:
     print(e)
     sys.exit(4)
 
+if not len(user) or not len(password):
+    print('Missing COPERNICUS SCIHUB authentication information')
+    sys.exit(7)
+
 general_platform = None
 general_type = None
 general_direction = None
 general_ccperc = None
 general_directory = None
+
+polygons = []
+types = []
+directions = []
+platforms = []
+directories = []
+ccp = []
 
 for c in config:
     try:
@@ -335,13 +382,6 @@ for c in config:
     default_directory: %s
     ''' % (user, '<hidden>', servicebase, default_platform, default_direction, default_type, default_ccp, default_directory))
 
-    polygons = []
-    types = []
-    directions = []
-    platforms = []
-    directories = []
-    ccp = []
-
     for aoi in config[c]['items']:
 
         polygons.append(aoi['polygon'])
@@ -371,9 +411,7 @@ for c in config:
         except:
             platforms.append(default_platform)
 
-if not len(user) or not len(password):
-    print('Missing COPERNICUS SCIHUB authentication information')
-    sys.exit(7)
+# Now searching for all defined polygons
 
 api = SentinelAPI(user, password, servicebase)
 
@@ -399,7 +437,7 @@ while do:
             args = {
                 'ingestiondate': (refdate,'NOW'), 
                 'platformname': platforms[index], 
-                'producttype': types[index]
+                'producttype': types[index],
             }
             if directions[index] in ['Ascending', 'Descending']:
                 args['orbitdirection'] = directions[index]
@@ -433,16 +471,15 @@ while do:
                     orbit: %s
                     relorbit: %s
                     footprint: %s
-                    platform: %s''' % (product,filename,outdir,sub,idate,bdate,edate,ptype,direction,orb,relorb,footprint,platform) )
-                    products.append([product,filename,idate,footprint,bdate,edate,direction,ptype,orb,relorb,platform,outdir,])
+                    platform: %s''' % (product, filename, outdir, sub, idate, bdate, edate, ptype, direction, orb, relorb, footprint, platform) )
+                    products.append([product, filename, idate, footprint, bdate, edate, direction, ptype, orb, relorb, platform, outdir,])
 
     else:
 
         say("Refreshing from database contents...")
         cur = db.cursor()
         for entry in cur.execute('''SELECT hash,name,idate,footprint,bdate,edate,direction,ptype,orbitno,relorbitno,platform,outdir FROM products order by idate desc'''):
-            products.append([entry[0],entry[1],entry[2],entry[3],entry[4], \
-                entry[5],entry[6],entry[7],entry[8],entry[9],entry[10],entry[11],])
+            products.append(entry)
             say(products[-1])
 
     cur = db.cursor()
@@ -471,7 +508,8 @@ while do:
         cur.execute('''SELECT COUNT(*) FROM products WHERE hash=?''',(uniqid,))
         row = cur.fetchone()
 
-        Path(os.path.join(outdir, sub)).mkdir(parents=True, exist_ok=True)
+        if kml or data_download:
+            Path(os.path.join(outdir, sub)).mkdir(parents=True, exist_ok=True)
 
         if list_products:
             pf.write('%s|%s\n' % (uniqid, name))
@@ -490,42 +528,7 @@ while do:
                     say("skipping existing file %s" % filename)
 
             if kml:
-                poly = ogr.CreateGeometryFromWkt(footprint)
-                style = '''<Style
-id="ballon-style"><BalloonStyle><text><![CDATA[
-Name = $[Name]
-IngestionDate = $[IngestionDate]
-BeginDate = $[BeginDate]
-EndDate = $[EndDate]
-ProductType = $[ProductType]
-OrbitDirection = $[OrbitDirection]
-OrbitNumber = $[OrbitNumber]
-RelativeOrbitNumber = $[RelativeOrbitNumber]
-Platform = $[PlatformName]
-]]>
-</text></BalloonStyle></Style>
-'''
-                extdata = '''<ExtendedData>
-<Data name="Name"><value>%s</value></Data>
-<Data name="IngestionDate"><value>%s</value></Data>
-<Data name="BeginDate"><value>%s</value></Data>
-<Data name="EndDate"><value>%s</value></Data>
-<Data name="ProductType"><value>%s</value></Data>
-<Data name="OrbitDirection"><value>%s</value></Data>
-<Data name="OrbitNumber"><value>%s</value></Data>
-<Data name="RelativeOrbitNumber"><value>%s</value></Data>
-<Data name="PlatformName"><value>%s</value></Data>
-</ExtendedData> ''' % (name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,platform)
-                buff = '''<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2">
-<Document>%s<Placemark><name>%s</name><StyleUrl>#ballon-style</StyleUrl>%s%s</Placemark></Document></kml>''' % (style,name,extdata,poly.ExportToKML())
-                if overwrite or not os.path.exists(os.path.join(outdir, sub, name+'.kml')):
-                    kmlfile = open(os.path.join(outdir, sub, name)+'.kml','w')
-                    kmlfile.write(buff)
-                    kmlfile.close()
-                    say("KML file %s.kml created" % name)
-                else:
-                    say("KML file %s.kml skipped" % name)
+                create_kml(outdir, sub, name, footprint)
 
             if not refresh:
                 simple = shapely.wkt.loads(footprint)
@@ -535,7 +538,6 @@ Platform = $[PlatformName]
                         (id,hash,name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,footprint,platform,footprint_r1,centroid_r1,outdir,_footprint) 
                         VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CastToMultipolygon(ST_GeomFromText(?,4326)))''', 
                         (uniqid,name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,footprint,platform,footprint_r1,centroid_r1,outdir,footprint))
-                db.commit()
         else:
             say("skipping %s" % name)
 
@@ -546,10 +548,12 @@ Platform = $[PlatformName]
         do = False
     else:
         say("Waiting %d seconds" % waiting_time)
+        db.commit()
         db.close()
         time.sleep(waiting_time)
         db = spatialite.connect(db_file)
 
+db.commit()
 db.close()
 sys.exit(0)
 
