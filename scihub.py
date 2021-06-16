@@ -31,6 +31,7 @@ import datetime
 
 from sentinelsat.sentinel import SentinelAPI
 from ruamel.yaml import YAML
+import tenacity
 
 realms = {
     'apihub.esa.int' : 'https://apihub.copernicus.eu/apihub/',
@@ -60,6 +61,7 @@ refresh = False
 forever = False
 begin_date = '2014-01-01'
 end_date = None
+empty_queue = False
 
 default_direction = 'Ascending'
 default_platform = 'Sentinel-1'
@@ -69,7 +71,7 @@ default_directory = os.path.abspath('.')
 waiting_time = 28800
 
 def usage():
-    print('''usage: %s [-b date|-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-v|-o|-r|-n|-t|-R|-F|-M int |-T int]''' % sys.argv[0])
+    print('''usage: %s [-b date|-e date|-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-v|-o|-t|-R|-F|-T int]''' % sys.argv[0])
 
 def help():
     print('''
@@ -94,6 +96,7 @@ usage: %s [-b date|-e date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-r
     -R --refresh download missing/invalid/corrupted stuff on the basis of current db status
     -F --forever loop forever to download continuously images
     -T --forevertime=<time> loop time of waiting
+    -Q --queue download pending LTA products
 
 A Copenicus Open Data Hub username and password profile is required and read from a
 scihub configuration YAML file, such as:
@@ -191,6 +194,8 @@ def create_schema(db):
             SELECT InitSpatialMetaData();
             SELECT AddGeometryColumn( 'products', '_footprint', 4326, 'MULTIPOLYGON', 'XY');
             SELECT CreateSpatialIndex('products', '_footprint');
+            CREATE TABLE queue(hash text, name text, outdir text);
+            CREATE UNIQUE INDEX qh ON queue(hash);
             COMMIT;
             ''')
     db.commit()
@@ -235,14 +240,38 @@ Platform = $[PlatformName]
     else:
         say("KML file %s.kml skipped" % name)
 
+@tenacity.retry(stop=tenacity.stop_after_attempt(3), wait=tenacity.wait_fixed(3600))
+def download_all(*args, **kwargs):
+    api = SentinelAPI(user, password, servicebase)
+    return api.download_all(*args, **kwargs)
+
+def download_queue(db):
+    cur = db.cursor()
+    ids = []
+    names = []
+    dirs = []
+    for entry in cur.execute('''SELECT hash, name, outdir, substr(hash,1,4) from queue'''):
+        d = os.path.join(entry[2],entry[3])
+        ids[d].append(entry[0])
+        names[d].append(entry[1])
+        dirs[d].appends(entry[2])
+        subs[d].appends(entry[3])
+    for dir in ids.keys():
+        downloaded, triggered, failed = download_all(ids[dir], directory_path=dir )
+        for id in downloaded:
+            cur.execute('''DELETE FROM queue WHERE hash=?''', (id))
+    db.commit()
+    db.close()
+
+#
 # Parsing command line arguments
+#
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:],'b:cvfdhmklD:L:C:orM:tRFT:n',
-            ['begin=','create','verbose','force','download','help','manifest','kml',
+    opts, args = getopt.getopt(sys.argv[1:],'b:e:cvfdhklD:L:C:otRFT:Q',
+            ['begin=','end=','create','verbose','force','download','help','kml',
                 'list','data=','products=','configuration=','overwrite',
-                'resume','test','refresh', 'forever', 'forevertime=',
-                'noretry', 'retrytime='])
+                'test','refresh', 'forever', 'forevertime=','queue' ])
 except getopt.GetoptError:
     usage()
     sys.exit(3)
@@ -284,6 +313,8 @@ for opt, arg in opts:
     if opt in ['-T','--forevertime']:
         forever = True
         waiting_time = int(arg)
+    if opt in ['-Q','--queue']:
+        empty_queue = True
     if opt in ['-h','--help']:
         help()
         sys.exit(5)
@@ -292,6 +323,10 @@ try:
     db = spatialite.connect(db_file)
 except spatialite.Error as e:
     print('Error %s:' % e.args[0])
+    sys.exit(1)
+
+if empty_queue:
+    download_queue(db)
     sys.exit(1)
 
 if refresh:
@@ -326,7 +361,7 @@ except Exception as e:
     sys.exit(4)
 
 if not len(user) or not len(password):
-    print('Missing COPERNICUS SCIHUB authentication information')
+    print('Missing Copernicus Open Data Hub credentials')
     sys.exit(7)
 
 general_platform = None
@@ -341,6 +376,7 @@ directions = []
 platforms = []
 directories = []
 ccp = []
+queue = []
 
 for c in config:
     try:
@@ -520,9 +556,12 @@ while do:
                 fullname = os.path.join(outdir, sub, filename)
                 if overwrite or not os.path.exists(fullname) or not zipfile.is_zipfile(fullname) or \
                             (test and not testzip(fullname)):
-                    say("downloading %s data file..." % name)
-                    api.download(id=uniqid, directory_path=os.path.join(outdir,sub))
-
+                    if api.is_online(uniqid):
+                        say("downloading %s data file..." % name)
+                        api.download(id=uniqid, directory_path=os.path.join(outdir,sub))
+                    else:
+                        say("queuing %s data file..." % name )
+                        cur.execute('''INSERT OR REPLACE INTO queue (hash, name, outdir) VALUES (?,?,?)''', (uniqid, name, outdir))
                 else:
                     say("skipping existing file %s" % filename)
 

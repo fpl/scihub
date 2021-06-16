@@ -1,7 +1,7 @@
 Copernicus Sentinel Science Hub rolling archive downloader
 ==========================================================
 
-This is an easy script to download Sentinel data from the ESA rolling archive
+This is an easy script to download Sentinel data from the COPERNICUS rolling archive
 located at the Copernicus Scientific Data Hub ttps://scihub.copernicus.eu/
 
 The archive can be queryed by a custom web service API documented at
@@ -22,9 +22,11 @@ in sentinelsat per se. Specifically:
  * it creates useful KML add-on files filled with information taken from imagery metadata
  * a simple YAML file format can be used to improve and customize
    the script configuration
+ * Files are downloaded in subtrees in order to avoid giant directories when
+   large spatial and time series are downloaded.
  * All management and download operations can be run separately
  * data downloads can be checked and restarted on failure
- * it supports DHuS mirrors, thanks to @realm convention in authentication
+ * it supports Copernicus mirrors, thanks to @realm convention in authentication
  * it support continuous download or can be used via cron
  * it is free software and can be extended easily for better purposes
  * it is currently used in production and it works!
@@ -75,8 +77,9 @@ all:
       direction: ascending
       directory: /tmp/Mediterraneo
 
+This file should be stored as `/usr/local/etc/scihub.yml`, while `$HOME/.scihub.yml` 
+should contain the user's credentials, such as
 
+ username: foo@apihub.esa.int
+ password: mysupersecretpasswd
 
-This file can be stored as `/usr/local/etc/scihub.yml` or `$HOME/.scihub.yml` or
-splitted among them, as more convenient. Generally the user YAML file is used
-to 
