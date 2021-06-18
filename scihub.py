@@ -32,6 +32,7 @@ import datetime
 from sentinelsat.sentinel import SentinelAPI
 from ruamel.yaml import YAML
 import tenacity
+from collections import defaultdict
 
 realms = {
     'apihub.esa.int' : 'https://apihub.copernicus.eu/apihub/',
@@ -247,19 +248,21 @@ def download_all(*args, **kwargs):
 
 def download_queue(db):
     cur = db.cursor()
-    ids = []
-    names = []
-    dirs = []
+    ids = defaultdict(list)
+    names = defaultdict(list)
+    dirs = defaultdict(list)
+    api = SentinelAPI(user, password, servicebase)
     for entry in cur.execute('''SELECT hash, name, outdir, substr(hash,1,4) from queue'''):
         d = os.path.join(entry[2],entry[3])
         ids[d].append(entry[0])
         names[d].append(entry[1])
-        dirs[d].appends(entry[2])
-        subs[d].appends(entry[3])
+        dirs[d].append(entry[2])
     for dir in ids.keys():
-        downloaded, triggered, failed = download_all(ids[dir], directory_path=dir )
-        for id in downloaded:
-            cur.execute('''DELETE FROM queue WHERE hash=?''', (id))
+        say("dir: %s" % dir)
+        say(ids[dir])
+        downloaded, triggered, failed = api.download_all(ids[dir], directory_path=dir, n_concurrent_dl=4, max_attempts=4, lta_retry_delay=30)
+        for hash in downloaded.keys():
+            cur.execute('''DELETE FROM queue WHERE hash=?''', (hash,))
     db.commit()
     db.close()
 
@@ -325,10 +328,6 @@ except spatialite.Error as e:
     print('Error %s:' % e.args[0])
     sys.exit(1)
 
-if empty_queue:
-    download_queue(db)
-    sys.exit(1)
-
 if refresh:
     force = True
 
@@ -363,6 +362,10 @@ except Exception as e:
 if not len(user) or not len(password):
     print('Missing Copernicus Open Data Hub credentials')
     sys.exit(7)
+
+if empty_queue:
+    download_queue(db)
+    sys.exit(1)
 
 general_platform = None
 general_type = None
@@ -562,6 +565,12 @@ while do:
                     else:
                         say("queuing %s data file..." % name )
                         cur.execute('''INSERT OR REPLACE INTO queue (hash, name, outdir) VALUES (?,?,?)''', (uniqid, name, outdir))
+                        try:
+                            api.trigger_offline_retrieval(uniqid)
+                        except:
+                            db.commit()
+                            pass
+
                 else:
                     say("skipping existing file %s" % filename)
 
