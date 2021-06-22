@@ -468,7 +468,8 @@ while do:
             if end_date is None:
                 end_date = 'NOW'
             else:
-                end_date = end_date + 'T23:59:59.000Z'
+                if end_date != 'NOW':
+                    end_date = end_date + 'T23:59:59.000Z'
             args = {
                 'ingestiondate': (refdate, end_date), 
                 'platformname': platforms[index], 
