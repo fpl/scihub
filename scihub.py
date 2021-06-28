@@ -264,6 +264,7 @@ def download_queue(db):
         say("dir: %s" % dir)
         say(ids[dir])
         cur.execute('''UPDATE queue SET status="pending" WHERE hash=?''', ids[dir])
+        db.commit()
         downloaded, triggered, failed = api.download_all(ids[dir], directory_path=dir, n_concurrent_dl=4, max_attempts=4, lta_retry_delay=30)
         for hash in downloaded.keys():
             cur.execute('''DELETE FROM queue WHERE hash=?''', (hash,))
@@ -271,7 +272,7 @@ def download_queue(db):
             cur.execute('''UPDATE queue SET status="requested" WHERE hash=?''', (hash,))
         for hash in failed.keys():
             cur.execute('''UPDATE queue SET status="queued" WHERE hash=?''', (hash,))
-    db.commit()
+        db.commit()
     db.close()
 
 #
