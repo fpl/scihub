@@ -57,6 +57,7 @@ db_file = 'scihub.splite'
 list_products = False
 overwrite = False
 configuration_file = '/usr/local/etc/scihub.yml'
+user_configuration_file = '~/.scihub.yml'
 test = False
 refresh = False
 forever = False
@@ -76,7 +77,7 @@ def usage():
 
 def help():
     print('''
-usage: %s [-b date|-e date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-r|-t|-R]
+usage: %s [-b date|-e date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-U path|-o|-r|-t|-R]
           [--create|--download|--configuration=path|--data=path|--force|--help|
            --kml|--list|--verbose|--products=path|--overwrite|--forever|
            --forevertime=seconds|--test|--refresh]
@@ -86,6 +87,7 @@ usage: %s [-b date|-e date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-o|-r
     -d --download download data .zip file
     -D --data=<path> name of Spatialite database to use
     -C --configuration=<path> YAML configuration file to use
+    -U --user-configuration=<path> YAML user's configuration file to use
     -f --force force
     -h --help this help
     -k --kml create KML skeleton addon files
@@ -277,9 +279,9 @@ def download_queue(db):
 #
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:],'b:e:cvfdhklD:L:C:otRFT:Q',
+    opts, args = getopt.getopt(sys.argv[1:],'b:e:cvfdhklD:L:C:U:otRFT:Q',
             ['begin=','end=','create','verbose','force','download','help','kml',
-                'list','data=','products=','configuration=','overwrite',
+                'list','data=','products=','configuration=','user-configuration=','overwrite',
                 'test','refresh', 'forever', 'forevertime=','queue' ])
 except getopt.GetoptError:
     usage()
@@ -311,6 +313,8 @@ for opt, arg in opts:
         productsfile = arg
     if opt in ['-C','--configuration']:
         configuration_file = arg
+    if opt in ['-U','--user-configuration']:
+        user_configuration_file = arg
     if opt in ['-o','--overwrite']:
         overwrite = True
     if opt in ['-t','--test']:
@@ -348,7 +352,7 @@ auth = ''
 try:
     yaml = YAML()
     config = yaml.load(Path(configuration_file))
-    user_config = yaml.load(Path(os.path.expanduser('~/.scihub.yml')))
+    user_config = yaml.load(Path(os.path.expanduser(user_configuration_file)))
 
     username = re.search('([^@]+)@?(.*)', user_config['username'])
     user = username.group(1)
