@@ -195,7 +195,8 @@ def create_schema(db):
             SELECT InitSpatialMetaData();
             SELECT AddGeometryColumn( 'products', '_footprint', 4326, 'MULTIPOLYGON', 'XY');
             SELECT CreateSpatialIndex('products', '_footprint');
-            CREATE TABLE queue(hash text, name text, outdir text);
+            CREATE TABLE queue(hash text, name text, outdir text, status text);
+            CREATE INDEX qs ON queue(status);
             CREATE UNIQUE INDEX qh ON queue(hash);
             COMMIT;
             ''')
@@ -252,7 +253,7 @@ def download_queue(db):
     names = defaultdict(list)
     dirs = defaultdict(list)
     api = SentinelAPI(user, password, servicebase)
-    for entry in cur.execute('''SELECT hash, name, outdir, substr(hash,1,4) from queue'''):
+    for entry in cur.execute('''SELECT hash, name, outdir, substr(hash,1,4), status from queue where status != "pending" '''):
         d = os.path.join(entry[2],entry[3])
         ids[d].append(entry[0])
         names[d].append(entry[1])
@@ -260,9 +261,14 @@ def download_queue(db):
     for dir in ids.keys():
         say("dir: %s" % dir)
         say(ids[dir])
+        cur.execute('''UPDATE queue SET status="pending" WHERE hash=?''', (ids[dir],))
         downloaded, triggered, failed = api.download_all(ids[dir], directory_path=dir, n_concurrent_dl=4, max_attempts=4, lta_retry_delay=30)
         for hash in downloaded.keys():
             cur.execute('''DELETE FROM queue WHERE hash=?''', (hash,))
+        for hash in triggered.keys():
+            cur.execute('''UPDATE queue SET status="requested" WHERE hash=?''', (hash,))
+        for hash in failed.keys():
+            cur.execute('''UPDATE queue SET status="queued" WHERE hash=?''', (hash,))
     db.commit()
     db.close()
 
@@ -569,12 +575,13 @@ while do:
                             pass
                     else:
                         say("queuing %s data file..." % name )
-                        cur.execute('''INSERT OR REPLACE INTO queue (hash, name, outdir) VALUES (?,?,?)''', (uniqid, name, outdir))
                         try:
                             api.trigger_offline_retrieval(uniqid)
+                            cur.execute('''INSERT OR REPLACE INTO queue (hash, name, outdir, status) VALUES (?,?,?,?)''', (uniqid, name, outdir, 'requested'))
                         except:
-                            db.commit()
+                            cur.execute('''INSERT OR REPLACE INTO queue (hash, name, outdir, status) VALUES (?,?,?,?)''', (uniqid, name, outdir,'queued'))
                             pass
+                        db.commit()
 
                 else:
                     say("skipping existing file %s" % filename)
