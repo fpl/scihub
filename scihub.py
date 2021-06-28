@@ -562,7 +562,11 @@ while do:
                             (test and not testzip(fullname)):
                     if api.is_online(uniqid):
                         say("downloading %s data file..." % name)
-                        api.download(id=uniqid, directory_path=os.path.join(outdir,sub))
+                        try:
+                            api.download(id=uniqid, directory_path=os.path.join(outdir,sub))
+                        except Exception as e:
+                            say(e)
+                            pass
                     else:
                         say("queuing %s data file..." % name )
                         cur.execute('''INSERT OR REPLACE INTO queue (hash, name, outdir) VALUES (?,?,?)''', (uniqid, name, outdir))
