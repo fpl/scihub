@@ -81,8 +81,9 @@ What follows is an example of configuration YAML file used by this script:
 ```
 
 This file should be stored as `/usr/local/etc/scihub.yml`, while `$HOME/.scihub.yml` 
-should contain the user's credentials, such as
+should contain the user's credentials, such as:
 
+```
  username: foo@apihub.esa.int
  password: mysupersecretpasswd
-
+```
