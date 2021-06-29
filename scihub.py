@@ -200,9 +200,9 @@ def create_schema(db):
             CREATE TABLE queue(hash text, name text, outdir text, status text);
             CREATE INDEX qs ON queue(status);
             CREATE UNIQUE INDEX qh ON queue(hash);
+            PRAGMA journal_mode=WAL;
             COMMIT;
             ''')
-    db.commit()
     db.close()
     say("Database created")
 
@@ -277,7 +277,6 @@ def download_queue(db):
             cur.execute('''UPDATE queue SET status="queued" WHERE hash=?''', ids[dir])
             say(e)
             pass
-        db.commit()
     db.close()
 
 #
@@ -339,7 +338,7 @@ for opt, arg in opts:
         sys.exit(5)
 
 try:
-    db = spatialite.connect(db_file)
+    db = spatialite.connect(db_file, isolation_level=None)
 except spatialite.Error as e:
     print('Error %s:' % e.args[0])
     sys.exit(1)
@@ -591,7 +590,6 @@ while do:
                         except:
                             cur.execute('''INSERT OR REPLACE INTO queue (hash, name, outdir, status) VALUES (?,?,?,?)''', (uniqid, name, outdir,'queued'))
                             pass
-                        db.commit()
 
                 else:
                     say("skipping existing file %s" % filename)
@@ -617,12 +615,10 @@ while do:
         do = False
     else:
         say("Waiting %d seconds" % waiting_time)
-        db.commit()
         db.close()
         time.sleep(waiting_time)
-        db = spatialite.connect(db_file)
+        db = spatialite.connect(db_file, isolation_level=None)
 
-db.commit()
 db.close()
 sys.exit(0)
 
