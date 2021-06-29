@@ -265,13 +265,18 @@ def download_queue(db):
         say(ids[dir])
         cur.execute('''UPDATE queue SET status="pending" WHERE hash=?''', ids[dir])
         db.commit()
-        downloaded, triggered, failed = api.download_all(ids[dir], directory_path=dir, n_concurrent_dl=4, max_attempts=4, lta_retry_delay=30)
-        for hash in downloaded.keys():
-            cur.execute('''DELETE FROM queue WHERE hash=?''', (hash,))
-        for hash in triggered.keys():
-            cur.execute('''UPDATE queue SET status="requested" WHERE hash=?''', (hash,))
-        for hash in failed.keys():
-            cur.execute('''UPDATE queue SET status="queued" WHERE hash=?''', (hash,))
+        try:
+            downloaded, triggered, failed = api.download_all(ids[dir], directory_path=dir, n_concurrent_dl=4, max_attempts=4, lta_retry_delay=30)
+            for hash in downloaded.keys():
+                cur.execute('''DELETE FROM queue WHERE hash=?''', (hash,))
+            for hash in triggered.keys():
+                cur.execute('''UPDATE queue SET status="requested" WHERE hash=?''', (hash,))
+            for hash in failed.keys():
+                cur.execute('''UPDATE queue SET status="queued" WHERE hash=?''', (hash,))
+        except Exception as e:
+            cur.execute('''UPDATE queue SET status="queued" WHERE hash=?''', ids[dir])
+            say(e)
+            pass
         db.commit()
     db.close()
 
