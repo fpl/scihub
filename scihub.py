@@ -73,14 +73,14 @@ default_directory = os.path.abspath('.')
 waiting_time = 28800
 
 def usage():
-    print('''usage: %s [-b date|-e date|-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-v|-o|-t|-R|-F|-T int]''' % sys.argv[0])
+    print('''usage: %s [-b date|-e date|-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-v|-o|-t|-Q|-R|-F|-T int]''' % sys.argv[0])
 
 def help():
     print('''
-usage: %s [-b date|-e date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-U path|-o|-r|-t|-R]
+usage: %s [-b date|-e date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-U path|-o|-r|-t|-R|-Q]
           [--create|--download|--configuration=path|--data=path|--force|--help|
            --kml|--list|--verbose|--products=path|--overwrite|--forever|
-           --forevertime=seconds|--test|--refresh]
+           --forevertime=seconds|--test|--refresh|--queue]
     -b --begin=<date> begin date to consider for products
     -b --end=<date> end date to consider for products
     -c --create create db only
