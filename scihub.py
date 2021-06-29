@@ -18,6 +18,7 @@
 
 import sys
 import getopt
+import os
 import os.path
 from osgeo import ogr
 import shapely.wkt
@@ -30,6 +31,7 @@ from pathlib import Path
 import datetime
 
 from sentinelsat.sentinel import SentinelAPI
+from sentinelsat.exceptions import *
 from ruamel.yaml import YAML
 import tenacity
 from collections import defaultdict
@@ -64,6 +66,8 @@ forever = False
 begin_date = '2014-01-01'
 end_date = None
 empty_queue = False
+inject_products = False
+prod_n_dest = list()
 
 default_direction = 'Ascending'
 default_platform = 'Sentinel-1'
@@ -73,12 +77,12 @@ default_directory = os.path.abspath('.')
 waiting_time = 28800
 
 def usage():
-    print('''usage: %s [-b date|-e date|-c|-d|-D path|-L path|-C path|-f|-h|-k|-l|-v|-o|-t|-Q|-R|-F|-T int]''' % sys.argv[0])
+    print('''usage: %s [-b date|-e date|-c|-d|-D path|-L path|-C path|-U path|-I path|-f|-h|-k|-l|-v|-o|-t|-Q|-R|-F|-T int]''' % sys.argv[0])
 
 def help():
     print('''
-usage: %s [-b date|-e date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-U path|-o|-r|-t|-R|-Q]
-          [--create|--download|--configuration=path|--data=path|--force|--help|
+usage: %s [-b date|-e date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-U path|-I path:destination|-o|-r|-t|-R|-Q]
+          [--create|--download|--configuration=path|--inject=path:destination|--data=path|--force|--help|
            --kml|--list|--verbose|--products=path|--overwrite|--forever|
            --forevertime=seconds|--test|--refresh|--queue]
     -b --begin=<date> begin date to consider for products
@@ -88,6 +92,7 @@ usage: %s [-b date|-e date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-U pa
     -D --data=<path> name of Spatialite database to use
     -C --configuration=<path> YAML configuration file to use
     -U --user-configuration=<path> YAML user's configuration file to use
+    -I --inject=<path:destination> inject existing product and link to destination tree
     -f --force force
     -h --help this help
     -k --kml create KML skeleton addon files
@@ -279,6 +284,67 @@ def download_queue(db):
             pass
     db.close()
 
+def inject_prods(db, prods):
+    api = SentinelAPI(user, password, servicebase)
+    cur = db.cursor()
+    for str in prods:
+        prod = str.split(':', 1)
+        name = prod[0]
+        dir = prod[1]
+        if os.path.exists(name + '.zip') and os.path.isdir(dir):
+            filename = os.path.basename(name)
+            say("Injecting product %s in %s" % (filename, dir))
+            args = { 'filename': filename + '*', }
+            results = api.query( area=None, date=None, **args )
+            if results is not None:
+                print(results)
+                for product, metadata in results.items():
+                    uniqid = product
+                    sub = product[0:4]
+                    filename = metadata['filename'][:-5]
+                    idate = metadata['ingestiondate']
+                    bdate = metadata['beginposition']
+                    edate = metadata['endposition']
+                    ptype = metadata['producttype']
+                    direction = metadata['orbitdirection']
+                    orb = metadata['orbitnumber']
+                    relorb = metadata['relativeorbitnumber']
+                    footprint = metadata['footprint']
+                    platform = metadata['platformname']
+                    say('''
+                    product: %s
+                    filename: %s
+                    dir: %s
+                    sub: %s
+                    idate: %s
+                    bdate: %s
+                    edate: %s
+                    type: %s
+                    direction: %s
+                    orbit: %s
+                    relorbit: %s
+                    footprint: %s
+                    platform: %s''' % (product, filename, dir, sub, idate, bdate, edate, ptype, direction, orb, relorb, footprint, platform) )
+                    simple = shapely.wkt.loads(footprint)
+                    footprint_r1 = shapely.wkt.dumps(simple,rounding_precision=1)
+                    centroid_r1 = shapely.wkt.dumps(simple.centroid,rounding_precision=1)
+                    Path(os.path.join(dir, sub)).mkdir(parents=True, exist_ok=True)
+                    os.link(name+'.zip', os.path.join(dir, sub, filename+'.zip'))
+                    if os.path.exists(name+'.kml'):
+                        os.link(name+'.kml', os.path.join(dir, sub, filename+'.kml'))
+                    if os.path.exists(name+'.manifest'):
+                        os.link(name+'.manifest', os.path.join(dir, sub, filename+'.manifest'))
+                    cur.execute('''INSERT OR REPLACE INTO products 
+                            (id,hash,name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,footprint,platform,footprint_r1,centroid_r1,outdir,_footprint) 
+                            VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CastToMultipolygon(ST_GeomFromText(?,4326)))''', 
+                            (uniqid, filename, idate, bdate, edate, ptype, direction, orb, relorb, footprint, platform, footprint_r1, centroid_r1, dir, footprint))
+                    say('Product %s inserted in ')
+            else:
+                say('Product %s not found' % (filename, ))
+        else:
+            say("File %s not found, skipped" % (name+'.zip',))
+            
+
 #
 # Parsing command line arguments
 #
@@ -286,7 +352,7 @@ def download_queue(db):
 try:
     opts, args = getopt.getopt(sys.argv[1:],'b:e:cvfdhklD:L:C:U:otRFT:Q',
             ['begin=','end=','create','verbose','force','download','help','kml',
-                'list','data=','products=','configuration=','user-configuration=','overwrite',
+                'list','data=','products=','configuration=','user-configuration=','inject=','overwrite',
                 'test','refresh', 'forever', 'forevertime=','queue' ])
 except getopt.GetoptError:
     usage()
@@ -320,6 +386,9 @@ for opt, arg in opts:
         configuration_file = arg
     if opt in ['-U','--user-configuration']:
         user_configuration_file = arg
+    if opt in ['-I','--inject']:
+        inject_products = True
+        prod_n_dest.append(arg)
     if opt in ['-o','--overwrite']:
         overwrite = True
     if opt in ['-t','--test']:
@@ -380,7 +449,11 @@ if not len(user) or not len(password):
 
 if empty_queue:
     download_queue(db)
-    sys.exit(1)
+    sys.exit(0)
+
+if inject_products:
+    inject_prods(db, prod_n_dest)
+    sys.exit(0)
 
 general_platform = None
 general_type = None
@@ -587,8 +660,10 @@ while do:
                         try:
                             api.trigger_offline_retrieval(uniqid)
                             cur.execute('''INSERT OR REPLACE INTO queue (hash, name, outdir, status) VALUES (?,?,?,?)''', (uniqid, name, outdir, 'requested'))
+                            say("Triggered data download")
                         except:
                             cur.execute('''INSERT OR REPLACE INTO queue (hash, name, outdir, status) VALUES (?,?,?,?)''', (uniqid, name, outdir,'queued'))
+                            say("Cannot trigger data download")
                             pass
 
                 else:
