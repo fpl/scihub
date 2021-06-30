@@ -338,11 +338,11 @@ def inject_prods(db, prods):
                             (id,hash,name,idate,bdate,edate,ptype,direction,orbitno,relorbitno,footprint,platform,footprint_r1,centroid_r1,outdir,_footprint) 
                             VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CastToMultipolygon(ST_GeomFromText(?,4326)))''', 
                             (uniqid, filename, idate, bdate, edate, ptype, direction, orb, relorb, footprint, platform, footprint_r1, centroid_r1, dir, footprint))
-                    say('Product %s inserted in ')
+                    say('Product %s inserted in database.' % ( filename, ))
             else:
-                say('Product %s not found' % (filename, ))
+                say('Product %s not found.' % (filename, ))
         else:
-            say("File %s not found, skipped" % (name+'.zip',))
+            say("File %s not found, skipped." % (name+'.zip',))
             
 
 #
@@ -350,7 +350,7 @@ def inject_prods(db, prods):
 #
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:],'b:e:cvfdhklD:L:C:U:otRFT:Q',
+    opts, args = getopt.getopt(sys.argv[1:],'b:e:cvfdhklD:L:C:U:I:otRFT:Q',
             ['begin=','end=','create','verbose','force','download','help','kml',
                 'list','database=','products=','configuration=','user-configuration=','inject=','overwrite',
                 'test','refresh', 'forever', 'forevertime=','queue' ])
