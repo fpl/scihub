@@ -82,14 +82,14 @@ def usage():
 def help():
     print('''
 usage: %s [-b date|-e date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-U path|-I path:destination|-o|-r|-t|-R|-Q]
-          [--create|--download|--configuration=path|--inject=path:destination|--data=path|--force|--help|
+          [--create|--download|--configuration=path|--inject=path:destination|--database=path|--force|--help|
            --kml|--list|--verbose|--products=path|--overwrite|--forever|
            --forevertime=seconds|--test|--refresh|--queue]
     -b --begin=<date> begin date to consider for products
     -b --end=<date> end date to consider for products
     -c --create create db only
     -d --download download data .zip file
-    -D --data=<path> name of Spatialite database to use
+    -D --database=<path> name of Spatialite database to use
     -C --configuration=<path> YAML configuration file to use
     -U --user-configuration=<path> YAML user's configuration file to use
     -I --inject=<path:destination> inject existing product and link to destination tree
@@ -352,7 +352,7 @@ def inject_prods(db, prods):
 try:
     opts, args = getopt.getopt(sys.argv[1:],'b:e:cvfdhklD:L:C:U:otRFT:Q',
             ['begin=','end=','create','verbose','force','download','help','kml',
-                'list','data=','products=','configuration=','user-configuration=','inject=','overwrite',
+                'list','database=','products=','configuration=','user-configuration=','inject=','overwrite',
                 'test','refresh', 'forever', 'forevertime=','queue' ])
 except getopt.GetoptError:
     usage()
@@ -377,7 +377,7 @@ for opt, arg in opts:
         output_list = True
     if opt in ['-f','--force']:
         force = True
-    if opt in ['-D','--data']:
+    if opt in ['-D','--database']:
         db_file = arg
     if opt in ['-L','--products']:
         list_products = True
