@@ -268,8 +268,8 @@ def download_queue(db):
     for dir in ids.keys():
         say("dir: %s" % dir)
         say(ids[dir])
-        cur.execute('''UPDATE queue SET status="pending" WHERE hash=?''', ids[dir])
-        db.commit()
+        for id in ids[dir]:
+            cur.execute('''UPDATE queue SET status="pending" WHERE hash=?''', (id,))
         try:
             downloaded, triggered, failed = api.download_all(ids[dir], directory_path=dir, n_concurrent_dl=4, max_attempts=4, lta_retry_delay=30)
             for hash in downloaded.keys():
@@ -556,7 +556,7 @@ while do:
             if end_date is None:
                 end_date = 'NOW'
             else:
-                if end_date != 'NOW':
+                if end_date != 'NOW' and len(end_date) == 10:
                     end_date = end_date + 'T23:59:59.000Z'
             args = {
                 'ingestiondate': (refdate, end_date), 
