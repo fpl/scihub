@@ -278,8 +278,18 @@ def download_queue(db):
                 cur.execute('''UPDATE queue SET status="requested" WHERE hash=?''', (hash,))
             for hash in failed.keys():
                 cur.execute('''UPDATE queue SET status="queued" WHERE hash=?''', (hash,))
+        except LTAError as e:
+            for id in ids[dir]:
+                cur.execute('''UPDATE queue SET status="queued" WHERE hash=?''', (id,))
+            msg, r = e.args
+            say("*** %s: %s" % (r, msg))
+            if r.status_code == 403 and msg.find("offline products retrieval quota exceeded")>0:
+                say('''Sleeping for %s seconds...''' % 43200 )
+                time.sleep(43200)
+            pass
         except Exception as e:
-            cur.execute('''UPDATE queue SET status="queued" WHERE hash=?''', ids[dir])
+            for id in ids[dir]:
+                cur.execute('''UPDATE queue SET status="queued" WHERE hash=?''', (id,))
             say(e)
             pass
     db.close()
