@@ -659,9 +659,9 @@ while do:
                 if overwrite or not os.path.exists(fullname) or not zipfile.is_zipfile(fullname) or \
                             (test and not testzip(fullname)):
                     if api.is_online(uniqid):
-                        say("downloading %s data file..." % name)
+                        say("downloading %s data file in %s..." % (name, os.path.join(outdir, sub)))
                         try:
-                            api.download(id=uniqid, directory_path=os.path.join(outdir,sub))
+                            api.download(id=uniqid, directory_path=os.path.join(outdir, sub))
                         except Exception as e:
                             say(e)
                             pass
