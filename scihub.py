@@ -75,15 +75,16 @@ default_type = 'GRD'
 default_ccp = 5
 default_directory = os.path.abspath('.')
 waiting_time = 28800
+check = True
 
 def usage():
     print('''usage: %s [-b date|-e date|-c|-d|-D path|-L path|-C path|-U path|-I path|-f|-h|-k|-l|-v|-o|-t|-Q|-R|-F|-T int]''' % sys.argv[0])
 
 def help():
     print('''
-usage: %s [-b date|-e date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-U path|-I path:destination|-o|-r|-t|-R|-Q]
+usage: %s [-b date|-e date|-c|-d|-D path|-f|-h|-k|-l|-v|-L path|-C path|-U path|-I path:destination|-o|-r|-t|-R|-Q|-n]
           [--create|--download|--configuration=path|--inject=path:destination|--database=path|--force|--help|
-           --kml|--list|--verbose|--products=path|--overwrite|--forever|
+           --kml|--list|--verbose|--products=path|--overwrite|--forever|--nochecksum|
            --forevertime=seconds|--test|--refresh|--queue]
     -b --begin=<date> begin date to consider for products
     -b --end=<date> end date to consider for products
@@ -105,6 +106,7 @@ usage: %s [-b date|-e date|-c|-d|-D path|-f|-h|-k|-l|-m|-v|-L path|-C path|-U pa
     -F --forever loop forever to download continuously images
     -T --forevertime=<time> loop time of waiting
     -Q --queue download pending LTA products
+    -n --nochecksum do not check products checksums
 
 A Copenicus Open Data Hub username and password profile is required and read from a
 scihub configuration YAML file, such as:
@@ -271,7 +273,7 @@ def download_queue(db):
         for id in ids[dir]:
             cur.execute('''UPDATE queue SET status="pending" WHERE hash=?''', (id,))
         try:
-            downloaded, triggered, failed = api.download_all(ids[dir], directory_path=dir, n_concurrent_dl=4, max_attempts=4, lta_retry_delay=30)
+            downloaded, triggered, failed = api.download_all(ids[dir], checksum=check, directory_path=dir, n_concurrent_dl=4, max_attempts=4, lta_retry_delay=30)
             for hash in downloaded.keys():
                 cur.execute('''DELETE FROM queue WHERE hash=?''', (hash,))
             for hash in triggered.keys():
@@ -360,10 +362,10 @@ def inject_prods(db, prods):
 #
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:],'b:e:cvfdhklD:L:C:U:I:otRFT:Q',
+    opts, args = getopt.getopt(sys.argv[1:],'b:e:cvfdhklD:L:C:U:I:otRFT:Qn',
             ['begin=','end=','create','verbose','force','download','help','kml',
                 'list','database=','products=','configuration=','user-configuration=','inject=','overwrite',
-                'test','refresh', 'forever', 'forevertime=','queue' ])
+                'test','refresh', 'forever', 'forevertime=','queue','nochecksum' ])
 except getopt.GetoptError:
     usage()
     sys.exit(3)
@@ -412,6 +414,8 @@ for opt, arg in opts:
         waiting_time = int(arg)
     if opt in ['-Q','--queue']:
         empty_queue = True
+    if opt in ['-n','--nochecksum']:
+        check = False
     if opt in ['-h','--help']:
         help()
         sys.exit(5)
@@ -531,7 +535,7 @@ for c in config:
             directions.append(default_direction)
          
         try:
-            ccp.append(aoi['cloudcovepercentage'])
+            ccp.append(aoi['cloudcoverpercentage'])
         except:
             ccp.append(default_ccp)
 
@@ -661,7 +665,7 @@ while do:
                     if api.is_online(uniqid):
                         say("downloading %s data file in %s..." % (name, os.path.join(outdir, sub)))
                         try:
-                            api.download(id=uniqid, directory_path=os.path.join(outdir, sub))
+                            api.download(id=uniqid, directory_path=os.path.join(outdir, sub), checksum=check)
                         except Exception as e:
                             say(e)
                             pass
