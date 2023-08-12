@@ -2,7 +2,7 @@ Copernicus Open Data Hub rolling archive downloader
 ==========================================================
 
 This is an easy script to download Sentinel data from the COPERNICUS rolling archive
-located at the Copernicus Opem Data (formerly Scientific Data) Hub at
+located at the Copernicus Open Data (formerly Scientific Data) Hub at
 https://scihub.copernicus.eu/
 
 The archive can be queryed by a custom web service API documented at
