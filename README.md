@@ -1,8 +1,9 @@
-Copernicus Sentinel Science Hub rolling archive downloader
+Copernicus Open Data Hub rolling archive downloader
 ==========================================================
 
 This is an easy script to download Sentinel data from the COPERNICUS rolling archive
-located at the Copernicus Scientific Data Hub ttps://scihub.copernicus.eu/
+located at the Copernicus Opem Data (formerly Scientific Data) Hub at
+https://scihub.copernicus.eu/
 
 The archive can be queryed by a custom web service API documented at
 https://scihub.copernicus.eu/userguide/5APIsAndBatchScripting
