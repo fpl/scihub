@@ -1,19 +1,27 @@
 Copernicus Open Data Hub rolling archive downloader
 ==========================================================
 
+_UPDATE: This code is maintained only for historical reasons. It is based on the Copernicus Open Data Hub which will
+be decommissioned starting from October 2023. 
+If you are interested in using the new Copernicus Data Space Ecosystem, 
+I wrote a similar Perl code that uses the new APIs and is actively developed. 
+It is maintained as part of my SM-Tools and available_ [here](https://baltig.cnr.it/francesco.lovergine/sm-tools)
+
+---
+
 This is an easy script to download Sentinel data from the COPERNICUS rolling archive
 located at the Copernicus Open Data (formerly Scientific Data) Hub at
 https://scihub.copernicus.eu/
 
-The archive can be queryed by a custom web service API documented at
+The archive can be queried by a custom web service API documented at
 https://scihub.copernicus.eu/userguide/5APIsAndBatchScripting
-and this script adopt it to do a better job in downloading periodically
+and this script adopts it to do a better job of downloading periodically
 and storing images. The API is based on OpenData http://www.odata.org/
 and OpenSearch http://www.opensearch.org/
 
-Instead of re-inventing the wheel, the current version of this script
+Instead of reinventing the wheel, the current version of this script
 uses the Python API provided by the `sentinelsat` package to query the archive
-and download images. This script has some useful features which can
+and download images. This script has some useful features that can
 be useful for regular (batch) downloads and are not currently available
 in sentinelsat per se. Specifically:
 
@@ -28,15 +36,15 @@ in sentinelsat per se. Specifically:
  * All management and download operations can be run separately
  * data downloads can be checked and restarted on failure
  * it supports Copernicus mirrors, thanks to @realm convention in authentication
- * it support continuous download or can be used via cron
+ * it supports continuous download or can be used via cron
  * it is free software and can be extended easily for better purposes
- * it is currently used in production and it works!
+ * it is currently used in production, and it works!
 
 Currently, the main use case of this script is the periodic downloading
-of images on one ore more areas (sites), typically by means of a
+of images on one or more areas (sites), typically by means of a
 crontab/timer job.
 
-What follows is an example of configuration YAML file used by this script:
+What follows is an example of the configuration YAML file used by this script:
 
 ```
   ---
